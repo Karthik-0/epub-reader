@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,3 +46,31 @@ Future<FontSizeNotifier> initFontSizeNotifier() async {
   final prefs = await SharedPreferences.getInstance();
   return FontSizeNotifier(prefs);
 }
+
+// ---------------------------------------------------------------------------
+// Theme mode — persisted across restarts via SharedPreferences
+// ---------------------------------------------------------------------------
+
+/// Notifier that loads/saves the dark mode flag from SharedPreferences.
+class ThemeModeNotifier extends AsyncNotifier<ThemeMode> {
+  static const _key = 'dark_mode';
+
+  @override
+  Future<ThemeMode> build() async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    final saved = prefs.getBool(_key);
+    if (saved == null) return ThemeMode.system;
+    return saved ? ThemeMode.dark : ThemeMode.light;
+  }
+
+  Future<void> toggle() async {
+    final current = state.valueOrNull ?? ThemeMode.system;
+    final next = current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    final prefs = await ref.read(sharedPreferencesProvider.future);
+    await prefs.setBool(_key, next == ThemeMode.dark);
+    state = AsyncData(next);
+  }
+}
+
+final themeModeProvider =
+    AsyncNotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);

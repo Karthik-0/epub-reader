@@ -32,6 +32,9 @@ class ChapterPageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? AppColors.readingTextDark : AppColors.readingText;
+    final codeBackground = isDark ? const Color(0xFF2D2D2D) : const Color(0xFFEEEEEE);
     return ClipRect(
       child: SizedBox(
         height: pageHeight,
@@ -47,9 +50,9 @@ class ChapterPageWidget extends StatelessWidget {
                   horizontal: AppDimensions.pageHorizontalPadding),
               child: Html(
                 data: htmlContent,
-                style: _buildStyle(),
+                style: _buildStyle(textColor: textColor, codeBackground: codeBackground),
                 extensions: [
-                  _buildMarkExtension(),
+                  _buildMarkExtension(textColor: textColor),
                 ],
               ),
             ),
@@ -66,7 +69,7 @@ class ChapterPageWidget extends StatelessWidget {
   /// tap fires correctly even inside a [SelectionArea] (GestureDetector children
   /// inside SelectionArea are swallowed by the selection machinery, but text-level
   /// recognizers are handled by the RichText layout independently).
-  TagExtension _buildMarkExtension() {
+  TagExtension _buildMarkExtension({required Color textColor}) {
     return TagExtension.inline(
       tagsToExtend: {'mark'},
       builder: (extContext) {
@@ -84,7 +87,7 @@ class ChapterPageWidget extends StatelessWidget {
           style: TextStyle(
             backgroundColor: bgColor,
             fontSize: fontSize,
-            color: AppColors.readingText,
+            color: textColor,
             height: 1.6,
           ),
         );
@@ -92,29 +95,41 @@ class ChapterPageWidget extends StatelessWidget {
     );
   }
 
-  Map<String, Style> _buildStyle() => {
+  Map<String, Style> _buildStyle({
+    required Color textColor,
+    required Color codeBackground,
+  }) =>
+      {
         'body': Style(
           fontSize: FontSize(fontSize),
           lineHeight: LineHeight(1.6),
-          color: AppColors.readingText,
+          color: textColor,
           margin: Margins.zero,
           padding: HtmlPaddings.zero,
         ),
         'p': Style(margin: Margins.only(bottom: 12)),
-        'h1': Style(fontSize: FontSize(fontSize * 1.4), fontWeight: FontWeight.bold),
-        'h2': Style(fontSize: FontSize(fontSize * 1.2), fontWeight: FontWeight.bold),
-        'h3': Style(fontSize: FontSize(fontSize * 1.1), fontWeight: FontWeight.bold),
+        'h1': Style(
+            fontSize: FontSize(fontSize * 1.4),
+            fontWeight: FontWeight.bold,
+            color: textColor),
+        'h2': Style(
+            fontSize: FontSize(fontSize * 1.2),
+            fontWeight: FontWeight.bold,
+            color: textColor),
+        'h3': Style(
+            fontSize: FontSize(fontSize * 1.1),
+            fontWeight: FontWeight.bold,
+            color: textColor),
         'img': Style(display: Display.block, width: Width.auto()),
         'pre': Style(
           fontSize: FontSize(fontSize * 0.8),
-          backgroundColor: const Color(0xFFEEEEEE),
+          backgroundColor: codeBackground,
           padding: HtmlPaddings.all(8),
         ),
         'code': Style(
           fontSize: FontSize(fontSize * 0.85),
-          backgroundColor: const Color(0xFFEEEEEE),
+          backgroundColor: codeBackground,
         ),
-        // Strip link styles that don't apply in offline context
         'a': Style(color: const Color(0xFF1565C0)),
       };
 }

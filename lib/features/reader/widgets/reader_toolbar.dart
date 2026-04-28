@@ -94,6 +94,21 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
             onPressed: onToggleBookmark,
             tooltip: isBookmarked ? 'Remove bookmark' : 'Add bookmark',
           ),
+        // Dark mode toggle
+        Consumer(builder: (context, ref, _) {
+          final themeMode =
+              ref.watch(themeModeProvider).valueOrNull ?? ThemeMode.system;
+          final isDark = themeMode == ThemeMode.dark ||
+              (themeMode == ThemeMode.system &&
+                  MediaQuery.platformBrightnessOf(context) ==
+                      Brightness.dark);
+          return IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+            onPressed: () =>
+                ref.read(themeModeProvider.notifier).toggle(),
+          );
+        }),
       ],
     );
   }

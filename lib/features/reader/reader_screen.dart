@@ -167,7 +167,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.readingBackground,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final mq = MediaQuery.of(context);
@@ -233,9 +233,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         final w = constraints.maxWidth;
                         final x = details.localPosition.dx;
                         if (x < w * 0.3) {
-                          notifier.previousPage();
+                          _animateToPreviousPage(state, notifier);
                         } else if (x > w * 0.7) {
-                          notifier.nextPage();
+                          _animateToNextPage(state, notifier);
                         } else {
                           notifier.toggleToolbars();
                         }
@@ -331,6 +331,39 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         },
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Animated page navigation (tap-zone)
+  // ---------------------------------------------------------------------------
+
+  void _animateToNextPage(ReaderState state, ReaderController notifier) {
+    if (!_pageController.hasClients) return;
+    final currentPage = state.currentPage;
+    final totalPages = state.totalPages;
+    if (currentPage < totalPages - 1) {
+      _pageController.animateToPage(
+        currentPage + 1,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      notifier.nextPage(); // triggers chapter advance
+    }
+  }
+
+  void _animateToPreviousPage(ReaderState state, ReaderController notifier) {
+    if (!_pageController.hasClients) return;
+    final currentPage = state.currentPage;
+    if (currentPage > 0) {
+      _pageController.animateToPage(
+        currentPage - 1,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      notifier.previousPage(); // triggers chapter retreat
+    }
   }
 
   /// Show TOC as a modal

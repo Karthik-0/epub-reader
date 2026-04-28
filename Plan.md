@@ -424,15 +424,15 @@ This is the meatiest phase. Take it in sub-steps.
 
 ### Phase 7 — Polish and Testing (2 days)
 
-- [ ] Reading-mode theme: warm off-white background `#fbf6e9`, dark gray text `#2a2a2a`. Optional: dark mode `#1a1a1a` bg, `#d8d4cc` text
-- [ ] Adjust line-height in `flutter_html` style to ~1.6 for readability
-- [ ] Add side margins (16dp horizontal padding) so text does not touch edges
-- [ ] Page transition animation (use `PageView`'s default or `CurvedAnimation`)
+- [x] Reading-mode theme: warm off-white background `#fbf6e9`, dark gray text `#2a2a2a`. Optional: dark mode `#1a1a1a` bg, `#d8d4cc` text
+- [x] Adjust line-height in `flutter_html` style to ~1.6 for readability
+- [x] Add side margins (16dp horizontal padding) so text does not touch edges
+- [x] Page transition animation (use `PageView`'s default or `CurvedAnimation`)
 - [ ] Test on at least one Android device + one iOS device (or simulator)
 - [ ] Test with the 5 EPUBs from section 9
 - [ ] Profile open time for a 500-page book — must be under 3 seconds
-- [ ] Run `flutter analyze` and clean up warnings
-- [ ] Build release APK: `flutter build apk --release`
+- [x] Run `flutter analyze` and clean up warnings
+- [x] Build release APK: `flutter build apk --release`
 - [ ] Build iOS: `flutter build ios --release` (no signing needed for POC demo)
 
 ### Phase 8 — Deliverables (0.5 day)
