@@ -416,11 +416,11 @@ This is the meatiest phase. Take it in sub-steps.
 
 ### Phase 6 — Bookmarks (1 day)
 
-- [ ] Bookmark icon in top toolbar — toggles bookmark for current `(chapterIndex, pageInChapter)`
-- [ ] When current page is bookmarked, show filled icon + small ribbon overlay on page
-- [ ] `BookmarksScreen` lists all bookmarks for the book: snippet (first ~80 chars of page text), chapter title, created date
-- [ ] Tap bookmark → jump to that chapter + page
-- [ ] Swipe-to-delete on bookmark list items
+- [x] Bookmark icon in top toolbar — toggles bookmark for current `(chapterIndex, pageInChapter)`
+- [x] When current page is bookmarked, show filled icon + small ribbon overlay on page
+- [x] `BookmarksScreen` lists all bookmarks for the book: snippet (first ~80 chars of page text), chapter title, created date
+- [x] Tap bookmark → jump to that chapter + page
+- [x] Swipe-to-delete on bookmark list items
 
 ### Phase 7 — Polish and Testing (2 days)
 

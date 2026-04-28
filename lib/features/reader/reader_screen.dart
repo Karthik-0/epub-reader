@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants.dart';
 import '../../core/preferences.dart';
 import '../../data/db/database.dart';
+import '../../data/repositories/bookmark_repository.dart';
 import '../../data/repositories/highlight_repository.dart';
 import '../../data/services/epub_service.dart';
 import '../../data/services/highlight_service.dart';
+import '../bookmarks/bookmarks_screen.dart';
 import '../highlights/highlights_screen.dart';
 import '../toc/toc_screen.dart';
 import 'pagination_engine.dart';
@@ -151,6 +153,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final chapterHighlightsAsync = ref.watch(
         chapterHighlightsProvider((book.id, chapterIdx)));
 
+    // Watch whether the current page is bookmarked
+    final isBookmarked = ref
+        .watch(pageBookmarkedProvider((book.id, chapterIdx, state.currentPage)))
+        .valueOrNull ?? false;
+
     // Inject highlights into HTML before rendering
     final htmlContent = chapterHighlightsAsync.when(
       data: (highlights) =>
@@ -209,6 +216,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       onToc: () => _showTocDialog(context, book, notifier),
                       onHighlights: () =>
                           _showHighlightsDialog(context, book, notifier),
+                      onBookmarks: () =>
+                          _showBookmarksDialog(context, book, notifier),
+                      isBookmarked: isBookmarked,
+                      onToggleBookmark: () =>
+                          _toggleBookmark(book, chapterIdx, state, chapter),
                     ),
                     secondChild: const SizedBox.shrink(),
                   ),
@@ -232,47 +244,61 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         controller: _pageController,
                         itemCount: state.totalPages,
                         onPageChanged: (page) => notifier.goToPage(page),
-                        itemBuilder: (context, pageIndex) => SelectionArea(
-                          onSelectionChanged: (value) {
-                            setState(() => _selectedText = value?.plainText);
-                          },
-                          contextMenuBuilder: (ctx, selectableRegionState) {
-                            final text = _selectedText ?? '';
-                            return AdaptiveTextSelectionToolbar.buttonItems(
-                              anchors: selectableRegionState.contextMenuAnchors,
-                              buttonItems: [
-                                for (final (label, colorName) in [
-                                  ('🟡 Yellow', 'yellow'),
-                                  ('🟢 Green', 'green'),
-                                  ('🩷 Pink', 'pink'),
-                                ])
-                                  ContextMenuButtonItem(
-                                    label: label,
-                                    onPressed: () async {
-                                      if (text.isNotEmpty) {
-                                        await _createHighlight(
-                                            colorName, text, chapterIdx, book);
-                                      }
-                                      selectableRegionState.hideToolbar();
-                                    },
-                                  ),
-                                ContextMenuButtonItem(
-                                  label: 'Cancel',
-                                  onPressed: selectableRegionState.hideToolbar,
+                        itemBuilder: (context, pageIndex) {
+                          final pageIsBookmarked =
+                              pageIndex == state.currentPage && isBookmarked;
+                          return Stack(
+                            children: [
+                              SelectionArea(
+                                onSelectionChanged: (value) {
+                                  setState(() => _selectedText = value?.plainText);
+                                },
+                                contextMenuBuilder: (ctx, selectableRegionState) {
+                                  final text = _selectedText ?? '';
+                                  return AdaptiveTextSelectionToolbar.buttonItems(
+                                    anchors: selectableRegionState.contextMenuAnchors,
+                                    buttonItems: [
+                                      for (final (label, colorName) in [
+                                        ('🟡 Yellow', 'yellow'),
+                                        ('🟢 Green', 'green'),
+                                        ('🩷 Pink', 'pink'),
+                                      ])
+                                        ContextMenuButtonItem(
+                                          label: label,
+                                          onPressed: () async {
+                                            if (text.isNotEmpty) {
+                                              await _createHighlight(
+                                                  colorName, text, chapterIdx, book);
+                                            }
+                                            selectableRegionState.hideToolbar();
+                                          },
+                                        ),
+                                      ContextMenuButtonItem(
+                                        label: 'Cancel',
+                                        onPressed: selectableRegionState.hideToolbar,
+                                      ),
+                                    ],
+                                  );
+                                },
+                                child: ChapterPageWidget(
+                                  htmlContent: htmlContent,
+                                  pageIndex: pageIndex,
+                                  pageHeight: pageHeight,
+                                  pageWidth: pageWidth,
+                                  fontSize: fontSize,
+                                  onHighlightTap: (id) =>
+                                      _showHighlightOptionsSheet(context, id),
                                 ),
-                              ],
-                            );
-                          },
-                          child: ChapterPageWidget(
-                            htmlContent: htmlContent,
-                            pageIndex: pageIndex,
-                            pageHeight: pageHeight,
-                            pageWidth: pageWidth,
-                            fontSize: fontSize,
-                            onHighlightTap: (id) =>
-                                _showHighlightOptionsSheet(context, id),
-                          ),
-                        ),
+                              ),
+                              if (pageIsBookmarked)
+                                const Positioned(
+                                  top: 0,
+                                  right: 16,
+                                  child: _BookmarkRibbon(),
+                                ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -442,5 +468,98 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
     await ref.read(highlightRepoProvider).addHighlight(companion);
   }
+
+  Future<void> _toggleBookmark(
+    ParsedBook book,
+    int chapterIdx,
+    ReaderState state,
+    ChapterContent chapter,
+  ) async {
+    final repo = ref.read(bookmarkRepoProvider);
+    final alreadyBookmarked = await repo.isPageBookmarked(
+        book.id, chapterIdx, state.currentPage);
+
+    if (alreadyBookmarked) {
+      await repo.deleteBookmarkForPage(book.id, chapterIdx, state.currentPage);
+    } else {
+      // Build a text snippet: proportional slice of chapter plain text
+      final plainText = HighlightService.extractPlainText(chapter.htmlContent);
+      final startChar = state.totalPages > 1
+          ? ((state.currentPage / state.totalPages) * plainText.length).round()
+          : 0;
+      final snippet = plainText
+          .substring(startChar.clamp(0, plainText.length))
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      final trimmed =
+          snippet.length > 80 ? snippet.substring(0, 80) : snippet;
+
+      await repo.addBookmark(BookmarksCompanion.insert(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        bookId: book.id,
+        chapterIndex: chapterIdx,
+        pageInChapter: state.currentPage,
+        snippet: trimmed,
+        createdAt: DateTime.now(),
+      ));
+    }
+  }
+
+  void _showBookmarksDialog(
+    BuildContext context,
+    ParsedBook book,
+    ReaderController notifier,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => BookmarksScreen(
+        bookId: book.id,
+        chapters: book.chapters,
+        onBookmarkTap: (chapterIndex, pageInChapter) {
+          notifier.goToChapter(chapterIndex);
+          // After chapter loads, jump to the saved page
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            notifier.goToPage(pageInChapter);
+          });
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
 }
 
+// ---------------------------------------------------------------------------
+// Bookmark ribbon widget
+// ---------------------------------------------------------------------------
+
+class _BookmarkRibbon extends StatelessWidget {
+  const _BookmarkRibbon();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(24, 40),
+      painter: _RibbonPainter(),
+    );
+  }
+}
+
+class _RibbonPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.amber.shade600;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width / 2, size.height - 10)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_RibbonPainter oldDelegate) => false;
+}

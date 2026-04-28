@@ -11,6 +11,9 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback onBack;
   final VoidCallback? onToc;
   final VoidCallback? onHighlights;
+  final VoidCallback? onBookmarks;
+  final VoidCallback? onToggleBookmark;
+  final bool isBookmarked;
 
   const ReaderTopBar({
     super.key,
@@ -18,6 +21,9 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
     required this.onBack,
     this.onToc,
     this.onHighlights,
+    this.onBookmarks,
+    this.onToggleBookmark,
+    this.isBookmarked = false,
   });
 
   @override
@@ -69,9 +75,24 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
           ),
         if (onHighlights != null)
           IconButton(
-            icon: const Icon(Icons.bookmark_outlined),
+            icon: const Icon(Icons.highlight),
             onPressed: onHighlights,
             tooltip: 'Highlights',
+          ),
+        if (onBookmarks != null)
+          IconButton(
+            icon: const Icon(Icons.collections_bookmark_outlined),
+            onPressed: onBookmarks,
+            tooltip: 'Bookmarks',
+          ),
+        if (onToggleBookmark != null)
+          IconButton(
+            icon: Icon(
+              isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: isBookmarked ? Colors.amber : null,
+            ),
+            onPressed: onToggleBookmark,
+            tooltip: isBookmarked ? 'Remove bookmark' : 'Add bookmark',
           ),
       ],
     );
