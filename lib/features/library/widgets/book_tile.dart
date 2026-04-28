@@ -25,8 +25,17 @@ class BookTile extends ConsumerWidget {
           children: [
             Expanded(
               flex: 5,
-              child: book.coverPath != null
-                  ? Image.file(File(book.coverPath!), fit: BoxFit.cover)
+              child: book.coverPath != null && File(book.coverPath!).existsSync()
+                  ? Image.file(
+                      File(book.coverPath!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, Object error, StackTrace? st) => Container(
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Icon(Icons.book, size: 50, color: Colors.grey),
+                        ),
+                      ),
+                    )
                   : Container(
                       color: Colors.grey[300],
                       child: const Center(
