@@ -10,7 +10,17 @@ class BookRepository {
 
   Future<void> addBook(BooksCompanion book) => db.into(db.books).insert(book);
   
-  Stream<List<Book>> getAllBooks() => db.select(db.books).watch();
+  Stream<List<Book>> getAllBooks() {
+    return (db.select(db.books)
+          ..orderBy([
+            (b) => OrderingTerm(
+                expression: b.lastOpenedAt, mode: OrderingMode.desc,
+                nulls: NullsOrder.last),
+            (b) => OrderingTerm(
+                expression: b.addedAt, mode: OrderingMode.desc),
+          ]))
+        .watch();
+  }
   
   Future<Book> getBookById(String id) => (db.select(db.books)..where((b) => b.id.equals(id))).getSingle();
   

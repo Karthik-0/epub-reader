@@ -361,16 +361,16 @@ Use `SelectionArea` with a `contextMenuBuilder` that returns a custom widget sho
 - [x] Wire repositories as Riverpod providers
 - [x] Write one unit test per repository inserting and reading a row
 
-### Phase 2 — Library Screen and Import (2 days)
+### Phase 2 — Library Screen and Import (2 days) ✅
 
-- [ ] Build `LibraryScreen` with a `GridView` of book covers + title + author
-- [ ] Empty state: "No books yet — tap + to add one"
-- [ ] FAB with `+` icon → opens `file_picker` filtered to `.epub`
-- [ ] On file pick → call `EpubService.importEpub` (show loading dialog) → save to DB → refresh grid
-- [ ] Implement `EpubService.importEpub` per section 5
-- [ ] Long-press on book tile → show "Delete" option (deletes from DB and removes file/cover)
-- [ ] Tap on book tile → navigate to `ReaderScreen` with `bookId`
-- [ ] **Test with 5 EPUBs** of varying complexity (see section 9). Fix parsing edge cases as they come up.
+- [x] Build `LibraryScreen` with a `GridView` of book covers + title + author
+- [x] Empty state: "No books yet — tap + to add one"
+- [x] FAB with `+` icon → opens `file_picker` filtered to `.epub`
+- [x] On file pick → call `EpubService.importEpub` (show loading dialog) → save to DB → refresh grid
+- [x] Implement `EpubService.importEpub` per section 5
+- [x] Long-press on book tile → show "Delete" option (deletes from DB and removes file/cover)
+- [x] Tap on book tile → navigate to `ReaderScreen` with `bookId`
+- [x] **Test with 5 EPUBs** of varying complexity (see section 9). Fix parsing edge cases as they come up.
 
 ### Phase 3 — Reader Core (3 days)
 

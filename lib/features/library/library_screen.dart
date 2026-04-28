@@ -5,8 +5,7 @@ import 'library_controller.dart';
 import '../../data/services/epub_service.dart';
 import '../../data/repositories/book_repository.dart';
 import '../../data/db/database.dart';
-import '../reader/reader_screen.dart';
-import 'dart:io';
+import 'widgets/book_tile.dart';
 import 'package:drift/drift.dart' as drift;
 
 class LibraryScreen extends ConsumerWidget {
@@ -91,71 +90,3 @@ class LibraryScreen extends ConsumerWidget {
   }
 }
 
-class BookTile extends ConsumerWidget {
-  final Book book;
-  const BookTile({super.key, required this.book});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return GestureDetector(
-      onLongPress: () {
-        // Show delete option
-        showDialog(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: const Text('Delete Book'),
-            content: Text('Are you sure you want to delete ${book.title}?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-              TextButton(
-                onPressed: () {
-                  ref.read(bookRepoProvider).deleteBook(book.id);
-                  if (book.coverPath != null && File(book.coverPath!).existsSync()) {
-                    File(book.coverPath!).deleteSync();
-                  }
-                  if (File(book.filePath).existsSync()) {
-                    File(book.filePath).deleteSync();
-                  }
-                  Navigator.pop(c);
-                },
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        );
-      },
-      onTap: () {
-        // Navigate to ReaderScreen
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (c) => ReaderScreen(bookId: book.id),
-        ));
-      },
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: book.coverPath != null
-                  ? Image.file(File(book.coverPath!), fit: BoxFit.cover)
-                  : Container(
-                      color: Colors.grey[300],
-                      child: const Center(child: Icon(Icons.book, size: 50, color: Colors.grey)),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  if (book.author != null) Text(book.author!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
