@@ -238,53 +238,29 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           },
                           contextMenuBuilder: (ctx, selectableRegionState) {
                             final text = _selectedText ?? '';
-                            return Material(
-                              elevation: 4,
-                              borderRadius: BorderRadius.circular(8),
-                              color: Colors.grey[900],
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _buildColorDot(
-                                      const Color(0xFFFFF59D),
-                                      text,
-                                      'yellow',
-                                      chapterIdx,
-                                      book,
-                                      selectableRegionState,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _buildColorDot(
-                                      const Color(0xFFC5E1A5),
-                                      text,
-                                      'green',
-                                      chapterIdx,
-                                      book,
-                                      selectableRegionState,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _buildColorDot(
-                                      const Color(0xFFF8BBD0),
-                                      text,
-                                      'pink',
-                                      chapterIdx,
-                                      book,
-                                      selectableRegionState,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    GestureDetector(
-                                      onTap: selectableRegionState.hideToolbar,
-                                      child: const Text(
-                                        '✕',
-                                        style: TextStyle(
-                                            color: Colors.white, fontSize: 18),
-                                      ),
-                                    ),
-                                  ],
+                            return AdaptiveTextSelectionToolbar.buttonItems(
+                              anchors: selectableRegionState.contextMenuAnchors,
+                              buttonItems: [
+                                for (final (label, colorName) in [
+                                  ('🟡 Yellow', 'yellow'),
+                                  ('🟢 Green', 'green'),
+                                  ('🩷 Pink', 'pink'),
+                                ])
+                                  ContextMenuButtonItem(
+                                    label: label,
+                                    onPressed: () async {
+                                      if (text.isNotEmpty) {
+                                        await _createHighlight(
+                                            colorName, text, chapterIdx, book);
+                                      }
+                                      selectableRegionState.hideToolbar();
+                                    },
+                                  ),
+                                ContextMenuButtonItem(
+                                  label: 'Cancel',
+                                  onPressed: selectableRegionState.hideToolbar,
                                 ),
-                              ),
+                              ],
                             );
                           },
                           child: ChapterPageWidget(
@@ -442,33 +418,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             ),
             const SizedBox(height: 8),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildColorDot(
-    Color color,
-    String text,
-    String colorName,
-    int chapterIdx,
-    ParsedBook book,
-    SelectableRegionState selectableRegionState,
-  ) {
-    return GestureDetector(
-      onTap: () async {
-        if (text.isNotEmpty) {
-          await _createHighlight(colorName, text, chapterIdx, book);
-        }
-        selectableRegionState.hideToolbar();
-      },
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: color,
-          border: Border.all(color: Colors.white54),
-          borderRadius: BorderRadius.circular(4),
         ),
       ),
     );

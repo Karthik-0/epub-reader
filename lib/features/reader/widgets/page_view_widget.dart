@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import '../../../core/constants.dart';
@@ -59,29 +60,32 @@ class ChapterPageWidget extends StatelessWidget {
   }
 
   /// Custom extension that renders `<mark data-highlight-id="..." data-color="...">` as
-  /// a colored, tappable inline widget.
+  /// a colored, tappable inline text span.
+  ///
+  /// Using [TagExtension.inline] with a [TextSpan] + [TapGestureRecognizer] so the
+  /// tap fires correctly even inside a [SelectionArea] (GestureDetector children
+  /// inside SelectionArea are swallowed by the selection machinery, but text-level
+  /// recognizers are handled by the RichText layout independently).
   TagExtension _buildMarkExtension() {
-    return TagExtension(
+    return TagExtension.inline(
       tagsToExtend: {'mark'},
       builder: (extContext) {
         final id = extContext.attributes['data-highlight-id'] ?? '';
         final colorName = extContext.attributes['data-color'] ?? 'yellow';
         final text = extContext.element?.text ?? '';
-        final bgColor =
-            Color(HighlightService.hexToColorInt(HighlightService.colorToHex(colorName)));
+        final bgColor = Color(
+            HighlightService.hexToColorInt(HighlightService.colorToHex(colorName)));
 
-        return GestureDetector(
-          onTap: id.isNotEmpty ? () => onHighlightTap?.call(id) : null,
-          child: Container(
-            color: bgColor,
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: fontSize,
-                color: AppColors.readingText,
-                height: 1.6,
-              ),
-            ),
+        return TextSpan(
+          text: text,
+          recognizer: (id.isNotEmpty && onHighlightTap != null)
+              ? (TapGestureRecognizer()..onTap = () => onHighlightTap!.call(id))
+              : null,
+          style: TextStyle(
+            backgroundColor: bgColor,
+            fontSize: fontSize,
+            color: AppColors.readingText,
+            height: 1.6,
           ),
         );
       },
