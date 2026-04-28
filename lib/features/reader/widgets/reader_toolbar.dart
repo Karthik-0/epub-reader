@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/preferences.dart';
+
+import '../../../core/constants.dart';
+import '../../../core/theme.dart';
 
 // ---------------------------------------------------------------------------
 // Top bar
@@ -9,9 +11,8 @@ import '../../../core/preferences.dart';
 class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
   final String chapterTitle;
   final VoidCallback onBack;
-  final VoidCallback? onToc;
-  final VoidCallback? onHighlights;
-  final VoidCallback? onBookmarks;
+  final VoidCallback? onTypography;
+  final ValueChanged<String>? onMenuAction;
   final VoidCallback? onToggleBookmark;
   final bool isBookmarked;
 
@@ -19,102 +20,78 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
     super.key,
     required this.chapterTitle,
     required this.onBack,
-    this.onToc,
-    this.onHighlights,
-    this.onBookmarks,
+    this.onTypography,
+    this.onMenuAction,
     this.onToggleBookmark,
     this.isBookmarked = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fontSizeAsync = ref.watch(sharedPreferencesProvider);
+    final theme = Theme.of(context);
+    final readerTheme = theme.extension<ReaderTheme>()!;
+    final iconColor = readerTheme.pageText.withValues(alpha: 0.88);
 
-    return AppBar(
-      backgroundColor:
-          Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: onBack,
-        tooltip: 'Back',
+    return Container(
+      height: preferredSize.height,
+      decoration: BoxDecoration(
+        color: readerTheme.chromeBackground,
+        border: Border(bottom: BorderSide(color: readerTheme.divider, width: 1)),
       ),
-      title: Text(
-        chapterTitle,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 16),
-      ),
-      actions: [
-        // Font size toggle (14, 17, 20)
-        fontSizeAsync.when(
-          data: (prefs) {
-            final currentSize = prefs.getDouble('font_size') ?? 17.0;
-            return PopupMenuButton<double>(
-              initialValue: currentSize,
-              icon: const Icon(Icons.text_fields),
-              tooltip: 'Font size',
-              onSelected: (size) async {
-                await prefs.setDouble('font_size', size);
-              },
-              itemBuilder: (BuildContext context) {
-                return const [
-                  PopupMenuItem(value: 14.0, child: Text('Small (14)')),
-                  PopupMenuItem(value: 17.0, child: Text('Medium (17)')),
-                  PopupMenuItem(value: 20.0, child: Text('Large (20)')),
-                ];
-              },
-            );
-          },
-          loading: () => const SizedBox.shrink(),
-          error: (Object e, StackTrace st) => const SizedBox.shrink(),
-        ),
-        if (onToc != null)
+      child: Row(
+        children: [
           IconButton(
-            icon: const Icon(Icons.list),
-            onPressed: onToc,
-            tooltip: 'Table of contents',
+            icon: Icon(Icons.arrow_back, color: iconColor, size: 20),
+            onPressed: onBack,
+            tooltip: 'Back',
           ),
-        if (onHighlights != null)
-          IconButton(
-            icon: const Icon(Icons.highlight),
-            onPressed: onHighlights,
-            tooltip: 'Highlights',
-          ),
-        if (onBookmarks != null)
-          IconButton(
-            icon: const Icon(Icons.collections_bookmark_outlined),
-            onPressed: onBookmarks,
-            tooltip: 'Bookmarks',
-          ),
-        if (onToggleBookmark != null)
-          IconButton(
-            icon: Icon(
-              isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              color: isBookmarked ? Colors.amber : null,
+          Expanded(
+            child: Text(
+              chapterTitle,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontFamily: ReaderTypography.bookerly,
+                fontFamilyFallback: ReaderTypography.serifFallbacks,
+                fontSize: 16,
+                color: readerTheme.pageText,
+              ),
             ),
-            onPressed: onToggleBookmark,
-            tooltip: isBookmarked ? 'Remove bookmark' : 'Add bookmark',
           ),
-        // Dark mode toggle
-        Consumer(builder: (context, ref, _) {
-          final themeMode =
-              ref.watch(themeModeProvider).valueOrNull ?? ThemeMode.system;
-          final isDark = themeMode == ThemeMode.dark ||
-              (themeMode == ThemeMode.system &&
-                  MediaQuery.platformBrightnessOf(context) ==
-                      Brightness.dark);
-          return IconButton(
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-            tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-            onPressed: () =>
-                ref.read(themeModeProvider.notifier).toggle(),
-          );
-        }),
-      ],
+          if (onTypography != null)
+            IconButton(
+              icon: Icon(Icons.text_fields, color: iconColor, size: 20),
+              onPressed: onTypography,
+              tooltip: 'Typography',
+            ),
+          if (onToggleBookmark != null)
+            IconButton(
+              icon: Icon(
+                isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                color: isBookmarked ? readerTheme.accent : iconColor,
+                size: 20,
+              ),
+              onPressed: onToggleBookmark,
+              tooltip: isBookmarked ? 'Remove bookmark' : 'Add bookmark',
+            ),
+          if (onMenuAction != null)
+            PopupMenuButton<String>(
+              tooltip: 'Menu',
+              onSelected: onMenuAction,
+              icon: Icon(Icons.menu, color: iconColor, size: 20),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'contents', child: Text('Contents')),
+                PopupMenuItem(value: 'highlights', child: Text('Notes & Highlights')),
+                PopupMenuItem(value: 'bookmarks', child: Text('Bookmarks')),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(AppDimensions.chromeTopHeight);
 }
 
 // ---------------------------------------------------------------------------
@@ -124,65 +101,88 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
 class ReaderBottomBar extends StatelessWidget {
   final int currentPage;
   final int totalPages;
+  final int globalPage;
+  final int globalTotalPages;
   final int chapterIndex;
   final int totalChapters;
-  final VoidCallback? onPreviousChapter;
-  final VoidCallback? onNextChapter;
+  final ValueChanged<double>? onSeek;
+  final String locationLabel;
 
   const ReaderBottomBar({
     super.key,
     required this.currentPage,
     required this.totalPages,
+    required this.globalPage,
+    required this.globalTotalPages,
     required this.chapterIndex,
     required this.totalChapters,
-    this.onPreviousChapter,
-    this.onNextChapter,
+    required this.locationLabel,
+    this.onSeek,
   });
 
   @override
   Widget build(BuildContext context) {
-    final progressPercent =
-        totalPages > 1 ? (currentPage + 1) / totalPages : 1.0;
+    final theme = Theme.of(context);
+    final readerTheme = theme.extension<ReaderTheme>()!;
 
     return Container(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Thin progress bar across full width
-            LinearProgressIndicator(
-              value: progressPercent,
-              minHeight: 2,
-              backgroundColor: Colors.grey[300],
+      decoration: BoxDecoration(
+        color: readerTheme.chromeBackground,
+        border: Border(top: BorderSide(color: readerTheme.divider, width: 1)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: AppDimensions.progressHeight,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+              overlayShape: SliderComponentShape.noOverlay,
+              activeTrackColor: readerTheme.accent,
+              inactiveTrackColor: readerTheme.divider,
+              thumbColor: readerTheme.accent,
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.skip_previous),
-                    onPressed: onPreviousChapter,
-                    tooltip: 'Previous chapter',
-                    iconSize: 22,
-                  ),
-                  Text(
-                    'Ch ${chapterIndex + 1}/$totalChapters  ·  ${currentPage + 1}/$totalPages',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_next),
-                    onPressed: onNextChapter,
-                    tooltip: 'Next chapter',
-                    iconSize: 22,
-                  ),
-                ],
+            child: Slider(
+              value: totalPages > 1 ? currentPage.toDouble() : 0,
+              min: 0,
+              max: totalPages > 1 ? (totalPages - 1).toDouble() : 1,
+              onChanged: onSeek,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              locationLabel,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: readerTheme.secondaryText,
+                fontSize: AppFontSizes.secondaryLabel,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ReaderStatusStrip extends StatelessWidget {
+  final String text;
+
+  const ReaderStatusStrip({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
+    return Container(
+      height: readerTheme.statusStripHeight,
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: AppFontSizes.status,
+              color: readerTheme.secondaryText,
+            ),
       ),
     );
   }

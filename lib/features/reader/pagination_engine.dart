@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 
+import '../../core/theme.dart';
+import 'widgets/page_view_widget.dart';
+
 /// Static helpers for page count calculation.
 class PaginationEngine {
   PaginationEngine._();
@@ -25,6 +28,10 @@ class HtmlHeightMeasurer extends StatefulWidget {
   final String htmlContent;
   final double width;
   final double fontSize;
+  final String fontFamily;
+  final double lineHeight;
+  final double pageWidth;
+  final ReaderTheme readerTheme;
   final void Function(double height) onHeightMeasured;
 
   const HtmlHeightMeasurer({
@@ -32,6 +39,10 @@ class HtmlHeightMeasurer extends StatefulWidget {
     required this.htmlContent,
     required this.width,
     required this.fontSize,
+    required this.fontFamily,
+    required this.lineHeight,
+    required this.pageWidth,
+    required this.readerTheme,
     required this.onHeightMeasured,
   });
 
@@ -75,29 +86,33 @@ class _HtmlHeightMeasurerState extends State<HtmlHeightMeasurer> {
   @override
   Widget build(BuildContext context) {
     return Offstage(
-      child: SizedBox(
-        key: _key,
-        width: widget.width,
-        child: Html(
-          data: widget.htmlContent,
-          style: _htmlStyle(widget.fontSize),
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minWidth: 0,
+        maxWidth: double.infinity,
+        minHeight: 0,
+        maxHeight: double.infinity,
+        child: SizedBox(
+          key: _key,
+          width: widget.pageWidth,
+          child: Padding(
+            padding: ChapterPageWidget.pagePaddingFor(
+              widget.readerTheme,
+              widget.pageWidth,
+            ),
+            child: Html(
+              data: widget.htmlContent,
+              style: ChapterPageWidget.buildHtmlStyle(
+                textColor: widget.readerTheme.pageText,
+                codeBackground: widget.readerTheme.chromeBackground,
+                fontSize: widget.fontSize,
+                fontFamily: widget.fontFamily,
+                lineHeight: widget.lineHeight,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
-
-  static Map<String, Style> _htmlStyle(double fontSize) => {
-        'body': Style(
-          fontSize: FontSize(fontSize),
-          lineHeight: LineHeight(1.6),
-          margin: Margins.zero,
-          padding: HtmlPaddings.zero,
-        ),
-        'p': Style(margin: Margins.only(bottom: 12)),
-        'img': Style(display: Display.block, width: Width.auto()),
-        'pre': Style(
-          fontSize: FontSize(fontSize * 0.8),
-          padding: HtmlPaddings.all(8),
-        ),
-      };
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme.dart';
 import '../../../data/db/database.dart';
 import '../../../data/repositories/highlight_repository.dart';
 
@@ -17,8 +19,10 @@ class HighlightsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final highlightsStream =
         ref.watch(highlightRepoProvider).getHighlightsForBook(bookId);
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
 
     return Scaffold(
+      backgroundColor: readerTheme.pageBackground,
       appBar: AppBar(
         title: const Text('Highlights'),
         leading: const CloseButton(),
@@ -37,12 +41,17 @@ class HighlightsScreen extends ConsumerWidget {
           final highlights = snapshot.data ?? [];
 
           if (highlights.isEmpty) {
-            return const Center(
-              child: Text('No highlights yet.\nSelect text to create highlights.'),
+            return Center(
+              child: Text(
+                'No highlights yet.\nSelect text to create highlights.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             );
           }
 
           return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             itemCount: highlights.length,
             itemBuilder: (context, index) {
               final highlight = highlights[index];
@@ -56,7 +65,7 @@ class HighlightsScreen extends ConsumerWidget {
                   );
                 },
                 background: Container(
-                  color: Colors.red,
+                  color: const Color(0xFFB3261E),
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 16),
                   child: const Icon(Icons.delete, color: Colors.white),
@@ -95,14 +104,20 @@ class _HighlightListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
     final colorDot = _getColorWidget(highlight.color);
 
     return GestureDetector(
       onTap: onTap,
       onLongPress: () => _showOptionsSheet(context),
       child: Container(
-        color: Colors.grey[50],
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: readerTheme.pageBackground,
+          border: Border(
+            bottom: BorderSide(color: readerTheme.divider),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -126,7 +141,7 @@ class _HighlightListItem extends StatelessWidget {
                   Text(
                     'Chapter ${highlight.chapterIndex + 1} • ${_formatDate(highlight.createdAt)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[600],
+                          color: readerTheme.secondaryText,
                         ),
                   ),
                 ],
@@ -141,8 +156,9 @@ class _HighlightListItem extends StatelessWidget {
   Widget _getColorWidget(String color) {
     final colorMap = {
       'yellow': Colors.yellow[200] ?? Colors.yellow,
-      'green': Colors.green[200] ?? Colors.green,
+      'blue': const Color(0xFFBFD7FF),
       'pink': Colors.pink[100] ?? Colors.pink,
+      'orange': const Color(0xFFF6D1A5),
     };
     final c = colorMap[color.toLowerCase()] ?? Colors.yellow;
     return Container(
@@ -172,20 +188,24 @@ class _HighlightListItem extends StatelessWidget {
   }
 
   void _showOptionsSheet(BuildContext context) {
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.delete),
-              title: const Text('Delete highlight'),
-              onTap: () {
-                Navigator.pop(context);
-                onDelete();
-              },
-            ),
-          ],
+        child: Container(
+          color: readerTheme.chromeBackground,
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete),
+                title: const Text('Delete highlight'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onDelete();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

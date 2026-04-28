@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
 import '../../core/constants.dart';
 import '../../core/preferences.dart';
+import '../../core/theme.dart';
 import '../../data/db/database.dart';
 import '../../data/repositories/bookmark_repository.dart';
 import '../../data/repositories/highlight_repository.dart';
@@ -12,6 +16,7 @@ import '../highlights/highlights_screen.dart';
 import '../toc/toc_screen.dart';
 import 'pagination_engine.dart';
 import 'reader_controller.dart';
+import 'widgets/highlight_toolbar.dart';
 import 'widgets/page_view_widget.dart';
 import 'widgets/reader_toolbar.dart';
 
@@ -26,15 +31,33 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late PageController _pageController;
   String? _selectedText;
+  Offset? _pointerDownPosition;
+  DateTime? _pointerDownAt;
+  String _currentTime = '';
+  Timer? _clockTimer;
+  Timer? _chapterTransitionTimer;
+  bool _chapterTransitionGuard = false;
+
+  String _formatTime(DateTime now) {
+    final h = now.hour.toString().padLeft(2, '0');
+    final m = now.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _currentTime = _formatTime(DateTime.now());
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _currentTime = _formatTime(DateTime.now()));
+    });
   }
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
+    _chapterTransitionTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -42,50 +65,51 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _onHeightMeasured(
     double height,
     double pageHeight,
+    double contentStep,
+    int chapterIndex,
     ReaderController notifier,
-    ReaderState state,
   ) {
-    if (pageHeight <= 0) return;
-    final total = PaginationEngine.computePageCount(height, pageHeight);
-    notifier.onTotalPagesMeasured(total);
+    if (pageHeight <= 0 || contentStep <= 0) return;
+    final total = PaginationEngine.computePageCount(height, contentStep);
+    notifier.onTotalPagesMeasured(total, chapterIndex: chapterIndex);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(readerControllerProvider(widget.bookId));
-    final notifier =
-        ref.read(readerControllerProvider(widget.bookId).notifier);
+    final notifier = ref.read(readerControllerProvider(widget.bookId).notifier);
 
-    // ---- Side-effects via ref.listen ----------------------------------------
+    ref.listen<ReaderState>(readerControllerProvider(widget.bookId), (
+      prev,
+      curr,
+    ) {
+      if (prev == null) return;
 
-    ref.listen<ReaderState>(
-      readerControllerProvider(widget.bookId),
-      (prev, curr) {
-        if (prev == null) return;
-
-        // Chapter changed → fresh PageController (must defer to avoid build-time setState)
-        if (prev.chapterIndex != curr.chapterIndex) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            setState(() {
-              _pageController.dispose();
-              _pageController = PageController();
-            });
+      // Chapter changed → fresh PageController starting at page 0
+      if (prev.chapterIndex != curr.chapterIndex) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _pageController.dispose();
+            _pageController = PageController(initialPage: curr.currentPage);
           });
-          return;
-        }
+          _releaseChapterTransitionGuard();
+        });
+        return;
+      }
 
-        // Page changed externally (restored position / pendingLastPage resolved)
-        if (prev.currentPage != curr.currentPage) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || !_pageController.hasClients) return;
+      // Page changed externally (restored position / pendingLastPage resolved)
+      if (prev.currentPage != curr.currentPage) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_pageController.hasClients) return;
+          final page = _pageController.page ?? curr.currentPage.toDouble();
+          final diff = (curr.currentPage - page).abs();
+          if (diff > 1) {
             _pageController.jumpToPage(curr.currentPage);
-          });
-        }
-      },
-    );
-
-    // ---- Render -------------------------------------------------------------
+          }
+        });
+      }
+    });
 
     return state.bookAsync.when(
       loading: () => Scaffold(
@@ -121,14 +145,74 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     );
   }
 
+  void _markChapterTransitionStarted() {
+    _chapterTransitionGuard = true;
+    _chapterTransitionTimer?.cancel();
+  }
+
+  void _releaseChapterTransitionGuard() {
+    _chapterTransitionTimer?.cancel();
+    _chapterTransitionTimer = Timer(const Duration(milliseconds: 260), () {
+      if (mounted) _chapterTransitionGuard = false;
+    });
+  }
+
+  void _handleReaderPointerUp(
+    PointerUpEvent event,
+    ReaderState state,
+    ReaderController notifier,
+    ParsedBook book,
+  ) {
+    final down = _pointerDownPosition;
+    final downAt = _pointerDownAt;
+    _pointerDownPosition = null;
+    _pointerDownAt = null;
+    if (down == null || downAt == null) return;
+
+    final delta = event.localPosition - down;
+    final distance = delta.distance;
+    final elapsed = DateTime.now().difference(downAt);
+    final isHorizontalSwipe =
+        delta.dx.abs() > 48 && delta.dx.abs() > delta.dy.abs() * 1.25;
+
+    if (isHorizontalSwipe && !_chapterTransitionGuard) {
+      final chapterIdx = state.chapterIndex.clamp(0, book.chapters.length - 1);
+      final swipedForward = delta.dx < 0;
+      final swipedBackward = delta.dx > 0;
+      final atLastPage = state.currentPage >= state.totalPages - 1;
+      final atFirstPage = state.currentPage <= 0;
+
+      if (swipedForward &&
+          atLastPage &&
+          chapterIdx < book.chapters.length - 1) {
+        _markChapterTransitionStarted();
+        notifier.goToChapter(chapterIdx + 1);
+        return;
+      }
+
+      if (swipedBackward && atFirstPage && chapterIdx > 0) {
+        _markChapterTransitionStarted();
+        notifier.goToChapter(chapterIdx - 1, lastPage: true);
+        return;
+      }
+    }
+
+    if (distance <= 24 && elapsed < const Duration(milliseconds: 450)) {
+      notifier.toggleToolbars();
+    }
+  }
+
   Widget _buildReader(
     BuildContext context,
     ReaderState state,
     ReaderController notifier,
     ParsedBook book,
   ) {
-    // Watch font size changes (invalidates key, triggers remeasure)
     final fontSizeAsync = ref.watch(sharedPreferencesProvider);
+    final fontFamily =
+        ref.watch(readerFontFamilyProvider).valueOrNull ??
+        ReaderTypography.bookerly;
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
     final fontSize = fontSizeAsync.when(
       data: (prefs) => prefs.getDouble('font_size') ?? 17.0,
       loading: () => 17.0,
@@ -137,28 +221,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     if (book.chapters.isEmpty) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(book.title),
-          leading: const BackButton(),
-        ),
+        appBar: AppBar(title: Text(book.title), leading: const BackButton()),
         body: const Center(child: Text('No chapters found in this EPUB.')),
       );
     }
 
-    final chapterIdx =
-        state.chapterIndex.clamp(0, book.chapters.length - 1);
+    final chapterIdx = state.chapterIndex.clamp(0, book.chapters.length - 1);
     final chapter = book.chapters[chapterIdx];
 
-    // Watch highlights for the current chapter (reactive stream)
     final chapterHighlightsAsync = ref.watch(
-        chapterHighlightsProvider((book.id, chapterIdx)));
+      chapterHighlightsProvider((book.id, chapterIdx)),
+    );
+    final isBookmarked =
+        ref
+            .watch(
+              pageBookmarkedProvider((book.id, chapterIdx, state.currentPage)),
+            )
+            .valueOrNull ??
+        false;
 
-    // Watch whether the current page is bookmarked
-    final isBookmarked = ref
-        .watch(pageBookmarkedProvider((book.id, chapterIdx, state.currentPage)))
-        .valueOrNull ?? false;
-
-    // Inject highlights into HTML before rendering
     final htmlContent = chapterHighlightsAsync.when(
       data: (highlights) =>
           HighlightService.injectHighlights(chapter.htmlContent, highlights),
@@ -166,222 +247,476 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       error: (Object e, StackTrace st) => chapter.htmlContent,
     );
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final mq = MediaQuery.of(context);
-          final topPadding = mq.padding.top;
-          final bottomPadding = mq.padding.bottom;
+    final locationLabel = _buildLocationLabel(book, chapterIdx, state);
 
-          const topBarHeight = kToolbarHeight;
-          const bottomBarHeight = 56.0; // progress line + row
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: readerTheme.overlayStyle.copyWith(
+        statusBarColor: readerTheme.pageBackground,
+        systemNavigationBarColor: readerTheme.pageBackground,
+      ),
+      child: Scaffold(
+        backgroundColor: readerTheme.pageBackground,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final pageWidth = constraints.maxWidth;
+              final pageHeight =
+                  constraints.maxHeight -
+                  readerTheme.statusStripHeight -
+                  AppDimensions.readingAreaTopPadding -
+                  AppDimensions.readingAreaBottomPadding -
+                  (state.showToolbars
+                      ? AppDimensions.chromeTopHeight +
+                            AppDimensions.chromeBottomHeight
+                      : 0);
+              final verticalBleed = ChapterPageWidget.pageVerticalBleed(
+                fontSize,
+                readerTheme.lineHeight,
+              );
+              final contentStep = ChapterPageWidget.effectiveContentStep(
+                pageHeight,
+                verticalBleed,
+                fontSize,
+                readerTheme.lineHeight,
+              );
 
-          final pageHeight = constraints.maxHeight -
-              topPadding -
-              bottomPadding -
-              (state.showToolbars ? topBarHeight + bottomBarHeight : 0);
-          final pageWidth = constraints.maxWidth;
-          final measureWidth =
-              pageWidth - AppDimensions.pageHorizontalPadding * 2;
-
-          return Stack(
-            children: [
-              // ---- Off-screen height measurer (keyed by fontSize for remeasure) ----
-              HtmlHeightMeasurer(
-                key: ValueKey(
-                    '${chapterIdx}_${fontSize}_$measureWidth'),
-                htmlContent: chapter.htmlContent,
-                width: measureWidth,
-                fontSize: fontSize,
-                onHeightMeasured: (h) =>
-                    _onHeightMeasured(h, pageHeight, notifier, state),
-              ),
-
-              // ---- Main layout ---------------------------------------------
-              Column(
+              return Stack(
                 children: [
-                  // Top safe-area spacer (always)
-                  SizedBox(height: topPadding),
-
-                  // Animated top toolbar
-                  AnimatedCrossFade(
-                    duration: const Duration(milliseconds: 200),
-                    crossFadeState: state.showToolbars
-                        ? CrossFadeState.showFirst
-                        : CrossFadeState.showSecond,
-                    firstChild: ReaderTopBar(
-                      chapterTitle: chapter.title,
-                      onBack: () => Navigator.of(context).pop(),
-                      onToc: () => _showTocDialog(context, book, notifier),
-                      onHighlights: () =>
-                          _showHighlightsDialog(context, book, notifier),
-                      onBookmarks: () =>
-                          _showBookmarksDialog(context, book, notifier),
-                      isBookmarked: isBookmarked,
-                      onToggleBookmark: () =>
-                          _toggleBookmark(book, chapterIdx, state, chapter),
+                  HtmlHeightMeasurer(
+                    key: ValueKey('${chapterIdx}_${fontSize}_$pageWidth'),
+                    htmlContent: chapter.htmlContent,
+                    width: pageWidth,
+                    fontSize: fontSize,
+                    fontFamily: fontFamily,
+                    lineHeight: readerTheme.lineHeight,
+                    pageWidth: pageWidth,
+                    readerTheme: readerTheme,
+                    onHeightMeasured: (h) => _onHeightMeasured(
+                      h,
+                      pageHeight,
+                      contentStep,
+                      chapterIdx,
+                      notifier,
                     ),
-                    secondChild: const SizedBox.shrink(),
                   ),
-
-                  // ---- Page view -------------------------------------------
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTapUp: (details) {
-                        final w = constraints.maxWidth;
-                        final x = details.localPosition.dx;
-                        if (x < w * 0.3) {
-                          _animateToPreviousPage(state, notifier);
-                        } else if (x > w * 0.7) {
-                          _animateToNextPage(state, notifier);
-                        } else {
-                          notifier.toggleToolbars();
-                        }
-                      },
-                      child: PageView.builder(
-                        controller: _pageController,
-                        itemCount: state.totalPages,
-                        onPageChanged: (page) => notifier.goToPage(page),
-                        itemBuilder: (context, pageIndex) {
-                          final pageIsBookmarked =
-                              pageIndex == state.currentPage && isBookmarked;
-                          return Stack(
-                            children: [
-                              SelectionArea(
-                                onSelectionChanged: (value) {
-                                  setState(() => _selectedText = value?.plainText);
-                                },
-                                contextMenuBuilder: (ctx, selectableRegionState) {
-                                  final text = _selectedText ?? '';
-                                  return AdaptiveTextSelectionToolbar.buttonItems(
-                                    anchors: selectableRegionState.contextMenuAnchors,
-                                    buttonItems: [
-                                      for (final (label, colorName) in [
-                                        ('🟡 Yellow', 'yellow'),
-                                        ('🟢 Green', 'green'),
-                                        ('🩷 Pink', 'pink'),
-                                      ])
-                                        ContextMenuButtonItem(
-                                          label: label,
-                                          onPressed: () async {
-                                            if (text.isNotEmpty) {
-                                              await _createHighlight(
-                                                  colorName, text, chapterIdx, book);
-                                            }
-                                            selectableRegionState.hideToolbar();
-                                          },
-                                        ),
-                                      ContextMenuButtonItem(
-                                        label: 'Cancel',
-                                        onPressed: selectableRegionState.hideToolbar,
-                                      ),
-                                    ],
-                                  );
-                                },
-                                child: ChapterPageWidget(
-                                  htmlContent: htmlContent,
-                                  pageIndex: pageIndex,
-                                  pageHeight: pageHeight,
-                                  pageWidth: pageWidth,
-                                  fontSize: fontSize,
-                                  onHighlightTap: (id) =>
-                                      _showHighlightOptionsSheet(context, id),
-                                ),
+                  Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        height: state.showToolbars
+                            ? AppDimensions.chromeTopHeight
+                            : 0,
+                        child: SingleChildScrollView(
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: AppDimensions.chromeTopHeight,
+                            child: ReaderTopBar(
+                              chapterTitle: chapter.title,
+                              onBack: () => Navigator.of(context).pop(),
+                              onTypography: () => _showTypographySheet(context),
+                              onMenuAction: (action) => _handleMenuAction(
+                                context,
+                                action,
+                                book,
+                                notifier,
                               ),
-                              if (pageIsBookmarked)
-                                const Positioned(
-                                  top: 0,
-                                  right: 16,
-                                  child: _BookmarkRibbon(),
-                                ),
-                            ],
-                          );
-                        },
+                              isBookmarked: isBookmarked,
+                              onToggleBookmark: () => _toggleBookmark(
+                                book,
+                                chapterIdx,
+                                state,
+                                chapter,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      if (!state.showToolbars)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppDimensions.readingAreaTopPadding,
+                          ),
+                          child: Text(
+                            _currentTime,
+                            style: TextStyle(
+                              fontSize: AppFontSizes.status,
+                              color: readerTheme.secondaryText,
+                              fontFamily: ReaderTypography.georgia,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(
+                          height: AppDimensions.readingAreaTopPadding,
+                        ),
+                      Expanded(
+                        child: Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (event) {
+                            _pointerDownPosition = event.localPosition;
+                            _pointerDownAt = DateTime.now();
+                          },
+                          onPointerUp: (event) {
+                            _handleReaderPointerUp(
+                              event,
+                              state,
+                              notifier,
+                              book,
+                            );
+                          },
+                          child: PageView.builder(
+                            key: ValueKey('pv-${state.chapterIndex}'),
+                            controller: _pageController,
+                            itemCount: state.totalPages,
+                            onPageChanged: (page) {
+                              if (_chapterTransitionGuard) return;
+                              notifier.goToPage(page);
+                            },
+                            itemBuilder: (context, pageIndex) {
+                              final pageIsBookmarked =
+                                  pageIndex == state.currentPage &&
+                                  isBookmarked;
+                              return Stack(
+                                children: [
+                                  SelectionArea(
+                                    onSelectionChanged: (value) {
+                                      _selectedText = value?.plainText;
+                                    },
+                                    contextMenuBuilder: (ctx, selectableRegionState) {
+                                      TextSelectionToolbarAnchors anchors;
+                                      try {
+                                        anchors = selectableRegionState
+                                            .contextMenuAnchors;
+                                      } catch (_) {
+                                        anchors =
+                                            const TextSelectionToolbarAnchors(
+                                              primaryAnchor: Offset.zero,
+                                              secondaryAnchor: Offset.zero,
+                                            );
+                                      }
+                                      return TextSelectionToolbar(
+                                        anchorAbove: anchors.primaryAnchor,
+                                        anchorBelow:
+                                            anchors.secondaryAnchor ??
+                                            anchors.primaryAnchor,
+                                        children: [
+                                          HighlightToolbar(
+                                            onHighlight: (color) =>
+                                                _createHighlight(
+                                                  color,
+                                                  _selectedText ?? '',
+                                                  chapterIdx,
+                                                  book,
+                                                ),
+                                            onCancel: selectableRegionState
+                                                .hideToolbar,
+                                            onNote: () {
+                                              selectableRegionState
+                                                  .hideToolbar();
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Notes are not implemented yet.',
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            onShare: () {
+                                              selectableRegionState
+                                                  .hideToolbar();
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Share is not implemented yet.',
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                    child: ChapterPageWidget(
+                                      htmlContent: htmlContent,
+                                      pageIndex: pageIndex,
+                                      pageHeight: pageHeight,
+                                      pageWidth: pageWidth,
+                                      fontSize: fontSize,
+                                      fontFamily: fontFamily,
+                                      onHighlightTap: (id) =>
+                                          _showHighlightOptionsSheet(
+                                            context,
+                                            id,
+                                          ),
+                                    ),
+                                  ),
+                                  if (pageIsBookmarked)
+                                    const Positioned(
+                                      top: 0,
+                                      right: 16,
+                                      child: _BookmarkRibbon(),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: AppDimensions.readingAreaBottomPadding,
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: state.showToolbars
+                            ? ReaderBottomBar(
+                                key: const ValueKey('reader-bottom-bar'),
+                                currentPage: state.currentPage,
+                                totalPages: state.totalPages,
+                                globalPage: state.globalPage(
+                                  chapterIdx,
+                                  state.currentPage,
+                                ),
+                                globalTotalPages: state.chapterPageCounts.values
+                                    .fold(0, (a, b) => a + b),
+                                chapterIndex: chapterIdx,
+                                totalChapters: book.chapters.length,
+                                locationLabel: locationLabel,
+                                onSeek: state.totalPages > 1
+                                    ? (value) =>
+                                          notifier.goToPage(value.round())
+                                    : null,
+                              )
+                            : ReaderStatusStrip(
+                                key: const ValueKey('reader-status-strip'),
+                                text: locationLabel,
+                              ),
+                      ),
+                    ],
                   ),
-                  AnimatedCrossFade(
-                    duration: const Duration(milliseconds: 200),
-                    crossFadeState: state.showToolbars
-                        ? CrossFadeState.showFirst
-                        : CrossFadeState.showSecond,
-                    firstChild: ReaderBottomBar(
-                      currentPage: state.currentPage,
-                      totalPages: state.totalPages,
-                      chapterIndex: chapterIdx,
-                      totalChapters: book.chapters.length,
-                      onPreviousChapter: chapterIdx > 0
-                          ? () => notifier.goToChapter(chapterIdx - 1)
-                          : null,
-                      onNextChapter: chapterIdx < book.chapters.length - 1
-                          ? () => notifier.goToChapter(chapterIdx + 1)
-                          : null,
-                    ),
-                    secondChild: const SizedBox.shrink(),
-                  ),
-
-                  // Bottom safe-area spacer
-                  SizedBox(height: bottomPadding),
                 ],
-              ),
-            ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _buildLocationLabel(
+    ParsedBook book,
+    int chapterIdx,
+    ReaderState state,
+  ) {
+    final progress = _computeProgressPercent(book, chapterIdx, state);
+    final globalPage = state.globalPage(chapterIdx, state.currentPage);
+    final globalTotal = state.chapterPageCounts.values.fold(0, (a, b) => a + b);
+    return 'Page $globalPage of ${globalTotal > 0 ? globalTotal : state.totalPages} · $progress%';
+  }
+
+  int _computeProgressPercent(
+    ParsedBook book,
+    int chapterIdx,
+    ReaderState state,
+  ) {
+    final chapterFraction = book.chapters.isEmpty
+        ? 0.0
+        : chapterIdx / book.chapters.length;
+    final pageFraction = state.totalPages > 0
+        ? (state.currentPage + 1) / state.totalPages / book.chapters.length
+        : 0.0;
+    return ((chapterFraction + pageFraction) * 100).clamp(0, 100).round();
+  }
+
+  void _handleMenuAction(
+    BuildContext context,
+    String action,
+    ParsedBook book,
+    ReaderController notifier,
+  ) {
+    switch (action) {
+      case 'contents':
+        _showTocDialog(context, book, notifier);
+        break;
+      case 'highlights':
+        _showHighlightsDialog(context, book, notifier);
+        break;
+      case 'bookmarks':
+        _showBookmarksDialog(context, book, notifier);
+        break;
+    }
+  }
+
+  void _showTypographySheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => Consumer(
+        builder: (context, ref, _) {
+          final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
+          final selectedMode =
+              ref.watch(readerColorModeProvider).valueOrNull ??
+              ReaderColorMode.sepia;
+          final selectedFont =
+              ref.watch(readerFontFamilyProvider).valueOrNull ??
+              ReaderTypography.bookerly;
+          final selectedSize =
+              ref
+                  .watch(sharedPreferencesProvider)
+                  .valueOrNull
+                  ?.getDouble('font_size') ??
+              AppFontSizes.medium;
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.4,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            color: readerTheme.chromeBackground,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Typography',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: AppFontSizes.options.map((size) {
+                    final selected = selectedSize == size;
+                    return GestureDetector(
+                      onTap: () async {
+                        final prefs = await ref.read(
+                          sharedPreferencesProvider.future,
+                        );
+                        await prefs.setDouble('font_size', size);
+                        if (context.mounted) Navigator.of(sheetContext).pop();
+                      },
+                      child: Column(
+                        children: [
+                          Text(
+                            'A',
+                            style: TextStyle(
+                              fontSize: size,
+                              color: readerTheme.pageText,
+                              fontFamily: ReaderTypography.bookerly,
+                              fontFamilyFallback:
+                                  ReaderTypography.serifFallbacks,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: 24,
+                            height: 1.5,
+                            color: selected
+                                ? readerTheme.accent
+                                : Colors.transparent,
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: ReaderColorMode.values.map((mode) {
+                    final selected = mode == selectedMode;
+                    final color = switch (mode) {
+                      ReaderColorMode.sepia => ReaderColors.sepiaBackground,
+                      ReaderColorMode.white => ReaderColors.whiteBackground,
+                      ReaderColorMode.dark => ReaderColors.darkBackground,
+                    };
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: GestureDetector(
+                        onTap: () => ref
+                            .read(readerColorModeProvider.notifier)
+                            .setMode(mode),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selected
+                                  ? readerTheme.accent
+                                  : readerTheme.divider,
+                              width: selected ? 2 : 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: ListView(
+                    children: ReaderTypography.pickerOptions.map((font) {
+                      final selected = font == selectedFont;
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          font,
+                          style: TextStyle(
+                            fontFamily: font,
+                            fontFamilyFallback: ReaderTypography.serifFallbacks,
+                            color: readerTheme.pageText,
+                          ),
+                        ),
+                        trailing: selected
+                            ? Icon(
+                                Icons.check,
+                                color: readerTheme.accent,
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () => ref
+                            .read(readerFontFamilyProvider.notifier)
+                            .setFontFamily(font),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Animated page navigation (tap-zone)
-  // ---------------------------------------------------------------------------
-
-  void _animateToNextPage(ReaderState state, ReaderController notifier) {
-    if (!_pageController.hasClients) return;
-    final currentPage = state.currentPage;
-    final totalPages = state.totalPages;
-    if (currentPage < totalPages - 1) {
-      _pageController.animateToPage(
-        currentPage + 1,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      notifier.nextPage(); // triggers chapter advance
-    }
-  }
-
-  void _animateToPreviousPage(ReaderState state, ReaderController notifier) {
-    if (!_pageController.hasClients) return;
-    final currentPage = state.currentPage;
-    if (currentPage > 0) {
-      _pageController.animateToPage(
-        currentPage - 1,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      notifier.previousPage(); // triggers chapter retreat
-    }
-  }
-
-  /// Show TOC as a modal
   void _showTocDialog(
     BuildContext context,
     ParsedBook book,
     ReaderController notifier,
   ) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => TocScreen(
-        book: book,
-        onChapterSelected: (chapterIndex) {
-          notifier.goToChapter(chapterIndex);
-        },
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder: (routeContext, animation, secondaryAnimation) => TocScreen(
+          book: book,
+          onChapterSelected: (chapterIndex) =>
+              notifier.goToChapter(chapterIndex),
+        ),
+        transitionsBuilder:
+            (routeContext, animation, secondaryAnimation, child) {
+              return SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                    ),
+                child: child,
+              );
+            },
       ),
-      isScrollControlled: true,
-      useSafeArea: true,
     );
   }
 
@@ -390,23 +725,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     ParsedBook book,
     ReaderController notifier,
   ) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => HighlightsScreen(
-        bookId: book.id,
-        onHighlightTap: (chapterIndex) {
-          notifier.goToChapter(chapterIndex);
-          Navigator.of(context).pop();
-        },
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder: (routeContext, animation, secondaryAnimation) =>
+            HighlightsScreen(
+              bookId: book.id,
+              onHighlightTap: (chapterIndex) {
+                notifier.goToChapter(chapterIndex);
+                Navigator.of(routeContext).pop();
+              },
+            ),
+        transitionsBuilder:
+            (routeContext, animation, secondaryAnimation, child) {
+              return SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                    ),
+                child: child,
+              );
+            },
       ),
     );
   }
 
-  /// Shows a bottom sheet for an existing highlight (identified by [highlightId])
-  /// with options to delete or change color.
   void _showHighlightOptionsSheet(BuildContext context, String highlightId) {
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetCtx) => SafeArea(
@@ -423,22 +770,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            // Change color row
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Change color',
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.grey)),
+                  const Text(
+                    'Change color',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       for (final entry in [
-                        ('yellow', const Color(0xFFFFF59D)),
-                        ('green', const Color(0xFFC5E1A5)),
-                        ('pink', const Color(0xFFF8BBD0)),
+                        ('yellow', readerTheme.highlightYellow),
+                        ('blue', readerTheme.highlightBlue),
+                        ('pink', readerTheme.highlightPink),
+                        ('orange', readerTheme.highlightOrange),
                       ]) ...[
                         GestureDetector(
                           onTap: () async {
@@ -468,10 +816,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title:
-                  const Text('Delete highlight', style: TextStyle(color: Colors.red)),
+              title: const Text(
+                'Delete highlight',
+                style: TextStyle(color: Colors.red),
+              ),
               onTap: () async {
-                await ref.read(highlightRepoProvider).deleteHighlight(highlightId);
+                await ref
+                    .read(highlightRepoProvider)
+                    .deleteHighlight(highlightId);
                 if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
               },
             ),
@@ -510,12 +862,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   ) async {
     final repo = ref.read(bookmarkRepoProvider);
     final alreadyBookmarked = await repo.isPageBookmarked(
-        book.id, chapterIdx, state.currentPage);
-
+      book.id,
+      chapterIdx,
+      state.currentPage,
+    );
     if (alreadyBookmarked) {
       await repo.deleteBookmarkForPage(book.id, chapterIdx, state.currentPage);
     } else {
-      // Build a text snippet: proportional slice of chapter plain text
       final plainText = HighlightService.extractPlainText(chapter.htmlContent);
       final startChar = state.totalPages > 1
           ? ((state.currentPage / state.totalPages) * plainText.length).round()
@@ -524,17 +877,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           .substring(startChar.clamp(0, plainText.length))
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
-      final trimmed =
-          snippet.length > 80 ? snippet.substring(0, 80) : snippet;
-
-      await repo.addBookmark(BookmarksCompanion.insert(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        bookId: book.id,
-        chapterIndex: chapterIdx,
-        pageInChapter: state.currentPage,
-        snippet: trimmed,
-        createdAt: DateTime.now(),
-      ));
+      final trimmed = snippet.length > 80 ? snippet.substring(0, 80) : snippet;
+      await repo.addBookmark(
+        BookmarksCompanion.insert(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          bookId: book.id,
+          chapterIndex: chapterIdx,
+          pageInChapter: state.currentPage,
+          snippet: trimmed,
+          createdAt: DateTime.now(),
+        ),
+      );
     }
   }
 
@@ -543,39 +896,44 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     ParsedBook book,
     ReaderController notifier,
   ) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => BookmarksScreen(
-        bookId: book.id,
-        chapters: book.chapters,
-        onBookmarkTap: (chapterIndex, pageInChapter) {
-          notifier.goToChapter(chapterIndex);
-          // After chapter loads, jump to the saved page
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            notifier.goToPage(pageInChapter);
-          });
-          Navigator.of(context).pop();
-        },
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder: (routeContext, animation, secondaryAnimation) =>
+            BookmarksScreen(
+              bookId: book.id,
+              chapters: book.chapters,
+              onBookmarkTap: (chapterIndex, pageInChapter) {
+                notifier.goToChapter(chapterIndex);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  notifier.goToPage(pageInChapter);
+                });
+                Navigator.of(routeContext).pop();
+              },
+            ),
+        transitionsBuilder:
+            (routeContext, animation, secondaryAnimation, child) {
+              return SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                    ),
+                child: child,
+              );
+            },
       ),
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Bookmark ribbon widget
-// ---------------------------------------------------------------------------
 
 class _BookmarkRibbon extends StatelessWidget {
   const _BookmarkRibbon();
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(24, 40),
-      painter: _RibbonPainter(),
-    );
+    return CustomPaint(size: const Size(24, 40), painter: _RibbonPainter());
   }
 }
 

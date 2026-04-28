@@ -1,12 +1,14 @@
+import 'package:drift/drift.dart' as drift;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
-import 'library_controller.dart';
-import '../../data/services/epub_service.dart';
-import '../../data/repositories/book_repository.dart';
+
+import '../../core/theme.dart';
 import '../../data/db/database.dart';
+import '../../data/repositories/book_repository.dart';
+import '../../data/services/epub_service.dart';
+import 'library_controller.dart';
 import 'widgets/book_tile.dart';
-import 'package:drift/drift.dart' as drift;
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -14,18 +16,72 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final booksAsyncValue = ref.watch(libraryStreamProvider);
+    final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width >= 900 ? 4 : 2;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Library')),
+      backgroundColor: readerTheme.pageBackground,
+      appBar: AppBar(
+        titleSpacing: 16,
+        title: Text(
+          'Library',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Search is not implemented yet.')),
+              );
+            },
+            icon: const Icon(Icons.search),
+            tooltip: 'Search',
+          ),
+          IconButton(
+            onPressed: () => _pickAndImportEpub(context, ref),
+            icon: const Icon(Icons.add),
+            tooltip: 'Add book',
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'add') {
+                _pickAndImportEpub(context, ref);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'add',
+                child: Text('Add Book'),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: booksAsyncValue.when(
         data: (books) {
           if (books.isEmpty) {
-            return const Center(child: Text('No books yet — tap + to add one'));
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'No books yet',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add an EPUB from the top bar to start reading.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            );
           }
           return GridView.builder(
             padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
               childAspectRatio: 0.65,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
@@ -39,10 +95,6 @@ class LibraryScreen extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickAndImportEpub(context, ref),
-        child: const Icon(Icons.add),
       ),
     );
   }

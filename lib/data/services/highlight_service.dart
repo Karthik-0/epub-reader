@@ -75,13 +75,15 @@ class HighlightService {
   static String colorToHex(String color) {
     switch (color.toLowerCase()) {
       case 'yellow':
-        return '#fff59d';
-      case 'green':
-        return '#c5e1a5';
+        return '#ffe9a8';
+      case 'blue':
+        return '#bfd7ff';
       case 'pink':
-        return '#f8bbd0';
+        return '#f4c0d9';
+      case 'orange':
+        return '#f6d1a5';
       default:
-        return '#fff59d';
+        return '#ffe9a8';
     }
   }
 
