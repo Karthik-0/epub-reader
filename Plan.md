@@ -340,26 +340,26 @@ Use `SelectionArea` with a `contextMenuBuilder` that returns a custom widget sho
 
 ## 7. Phase-by-Phase Task List
 
-### Phase 0 — Setup (0.5 day)
+### Phase 0 — Setup (0.5 day) ✅
 
-- [ ] Create new Flutter project: `flutter create epub_reader_poc --org com.example`
-- [ ] Add packages from section 2 to `pubspec.yaml`, run `flutter pub get`
-- [ ] Set min SDKs: Android `minSdkVersion 24`, iOS deployment target 13
-- [ ] Add iOS file-picker permissions to `Info.plist` (`NSDocumentsFolderUsageDescription`)
-- [ ] Add Android storage permissions if targeting older devices (file_picker handles most cases)
-- [ ] Set up the folder structure from section 3
-- [ ] Wrap `MyApp` in `ProviderScope`
-- [ ] Smoke test: app launches with empty home screen
+- [x] Create new Flutter project: `flutter create epub_reader_poc --org com.example`
+- [x] Add packages from section 2 to `pubspec.yaml`, run `flutter pub get`
+- [x] Set min SDKs: Android `minSdkVersion 24`, iOS deployment target 13
+- [x] Add iOS file-picker permissions to `Info.plist` (`NSDocumentsFolderUsageDescription`)
+- [x] Add Android storage permissions if targeting older devices (file_picker handles most cases)
+- [x] Set up the folder structure from section 3
+- [x] Wrap `MyApp` in `ProviderScope`
+- [x] Smoke test: app launches with empty home screen
 
-### Phase 1 — Database and Repositories (1 day)
+### Phase 1 — Database and Repositories (1 day) ✅
 
-- [ ] Create `lib/data/db/database.dart` with the three tables from section 4
-- [ ] Run `dart run build_runner build` and verify `database.g.dart` is generated
-- [ ] Create `BookRepository` with: `addBook`, `getAllBooks` (Stream), `getBookById`, `updateLastPosition`, `deleteBook`
-- [ ] Create `HighlightRepository` with: `addHighlight`, `getHighlightsForBook` (Stream), `getHighlightsForChapter`, `deleteHighlight`
-- [ ] Create `BookmarkRepository` with: `addBookmark`, `getBookmarksForBook` (Stream), `deleteBookmark`, `isPageBookmarked`
-- [ ] Wire repositories as Riverpod providers
-- [ ] Write one unit test per repository inserting and reading a row
+- [x] Create `lib/data/db/database.dart` with the three tables from section 4
+- [x] Run `dart run build_runner build` and verify `database.g.dart` is generated
+- [x] Create `BookRepository` with: `addBook`, `getAllBooks` (Stream), `getBookById`, `updateLastPosition`, `deleteBook`
+- [x] Create `HighlightRepository` with: `addHighlight`, `getHighlightsForBook` (Stream), `getHighlightsForChapter`, `deleteHighlight`
+- [x] Create `BookmarkRepository` with: `addBookmark`, `getBookmarksForBook` (Stream), `deleteBookmark`, `isPageBookmarked`
+- [x] Wire repositories as Riverpod providers
+- [x] Write one unit test per repository inserting and reading a row
 
 ### Phase 2 — Library Screen and Import (2 days)
 
