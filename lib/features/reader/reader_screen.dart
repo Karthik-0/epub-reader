@@ -228,74 +228,74 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           notifier.toggleToolbars();
                         }
                       },
-                      child: SelectionArea(
-                        onSelectionChanged: (value) {
-                          setState(() => _selectedText = value?.plainText);
-                        },
-                        contextMenuBuilder: (ctx, selectableRegionState) {
-                          final text = _selectedText ?? '';
-                          return Material(
-                            elevation: 4,
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.grey[900],
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildColorDot(
-                                    const Color(0xFFFFF59D),
-                                    text,
-                                    'yellow',
-                                    chapterIdx,
-                                    book,
-                                    selectableRegionState,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildColorDot(
-                                    const Color(0xFFC5E1A5),
-                                    text,
-                                    'green',
-                                    chapterIdx,
-                                    book,
-                                    selectableRegionState,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildColorDot(
-                                    const Color(0xFFF8BBD0),
-                                    text,
-                                    'pink',
-                                    chapterIdx,
-                                    book,
-                                    selectableRegionState,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  GestureDetector(
-                                    onTap: selectableRegionState.hideToolbar,
-                                    child: const Text(
-                                      '✕',
-                                      style: TextStyle(
-                                          color: Colors.white, fontSize: 18),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                        child: PageView.builder(
+                      child: PageView.builder(
                         controller: _pageController,
                         itemCount: state.totalPages,
                         onPageChanged: (page) => notifier.goToPage(page),
-                        itemBuilder: (context, pageIndex) => ChapterPageWidget(
-                          htmlContent: htmlContent,
-                          pageIndex: pageIndex,
-                          pageHeight: pageHeight,
-                          pageWidth: pageWidth,
-                          fontSize: fontSize,
+                        itemBuilder: (context, pageIndex) => SelectionArea(
+                          onSelectionChanged: (value) {
+                            setState(() => _selectedText = value?.plainText);
+                          },
+                          contextMenuBuilder: (ctx, selectableRegionState) {
+                            final text = _selectedText ?? '';
+                            return Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.grey[900],
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildColorDot(
+                                      const Color(0xFFFFF59D),
+                                      text,
+                                      'yellow',
+                                      chapterIdx,
+                                      book,
+                                      selectableRegionState,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildColorDot(
+                                      const Color(0xFFC5E1A5),
+                                      text,
+                                      'green',
+                                      chapterIdx,
+                                      book,
+                                      selectableRegionState,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildColorDot(
+                                      const Color(0xFFF8BBD0),
+                                      text,
+                                      'pink',
+                                      chapterIdx,
+                                      book,
+                                      selectableRegionState,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: selectableRegionState.hideToolbar,
+                                      child: const Text(
+                                        '✕',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 18),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                          child: ChapterPageWidget(
+                            htmlContent: htmlContent,
+                            pageIndex: pageIndex,
+                            pageHeight: pageHeight,
+                            pageWidth: pageWidth,
+                            fontSize: fontSize,
+                          ),
                         ),
                       ),
-                      ),  // SelectionArea
                     ),
                   ),
                   AnimatedCrossFade(
