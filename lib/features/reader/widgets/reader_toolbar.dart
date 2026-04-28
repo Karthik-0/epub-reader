@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/preferences.dart';
 
 // ---------------------------------------------------------------------------
 // Top bar
 // ---------------------------------------------------------------------------
 
-class ReaderTopBar extends StatelessWidget implements PreferredSizeWidget {
+class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
   final String chapterTitle;
   final VoidCallback onBack;
   final VoidCallback? onToc; // Phase 4 — pass null to disable
@@ -17,9 +19,12 @@ class ReaderTopBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fontSizeAsync = ref.watch(sharedPreferencesProvider);
+
     return AppBar(
-      backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+      backgroundColor:
+          Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: onBack,
@@ -31,6 +36,29 @@ class ReaderTopBar extends StatelessWidget implements PreferredSizeWidget {
         style: const TextStyle(fontSize: 16),
       ),
       actions: [
+        // Font size toggle (14, 17, 20)
+        fontSizeAsync.when(
+          data: (prefs) {
+            final currentSize = prefs.getDouble('font_size') ?? 17.0;
+            return PopupMenuButton<double>(
+              initialValue: currentSize,
+              icon: const Icon(Icons.text_fields),
+              tooltip: 'Font size',
+              onSelected: (size) async {
+                await prefs.setDouble('font_size', size);
+              },
+              itemBuilder: (BuildContext context) {
+                return const [
+                  PopupMenuItem(value: 14.0, child: Text('Small (14)')),
+                  PopupMenuItem(value: 17.0, child: Text('Medium (17)')),
+                  PopupMenuItem(value: 20.0, child: Text('Large (20)')),
+                ];
+              },
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (Object e, StackTrace st) => const SizedBox.shrink(),
+        ),
         if (onToc != null)
           IconButton(
             icon: const Icon(Icons.list),

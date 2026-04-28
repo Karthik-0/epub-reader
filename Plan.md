@@ -396,13 +396,13 @@ This is the meatiest phase. Take it in sub-steps.
 - [x] On reader open, load `lastChapterIndex` + `lastPageInChapter` and start there
 - [x] Compute `progressPercent` as `(charsReadSoFar / totalChars) * 100`
 
-### Phase 4 — Font Size and TOC (1 day)
+### Phase 4 — Font Size and TOC (1 day) ✅
 
-- [ ] Add font-size toggle to top toolbar with three sizes: 14, 17, 20 sp
-- [ ] Persist user's font-size choice in `SharedPreferences`
-- [ ] On font-size change, re-paginate current chapter and snap to the page containing the previous `charOffset`
-- [ ] `TocScreen` shows list of chapter titles → tap navigates reader to that chapter, page 0
-- [ ] Hamburger / list icon in top toolbar opens TOC
+- [x] Add font-size toggle to top toolbar with three sizes: 14, 17, 20 sp
+- [x] Persist user's font-size choice in `SharedPreferences`
+- [x] On font-size change, re-paginate current chapter and snap to the page containing the previous `charOffset`
+- [x] `TocScreen` shows list of chapter titles → tap navigates reader to that chapter, page 0
+- [x] Hamburger / list icon in top toolbar opens TOC
 
 ### Phase 5 — Highlights (2 days)
 

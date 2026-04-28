@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants.dart';
+import '../../core/preferences.dart';
 import '../../data/services/epub_service.dart';
+import '../toc/toc_screen.dart';
 import 'pagination_engine.dart';
 import 'reader_controller.dart';
 import 'widgets/page_view_widget.dart';
@@ -119,6 +121,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     ReaderController notifier,
     ParsedBook book,
   ) {
+    // Watch font size changes (invalidates key, triggers remeasure)
+    final fontSizeAsync = ref.watch(sharedPreferencesProvider);
+    final fontSize = fontSizeAsync.when(
+      data: (prefs) => prefs.getDouble('font_size') ?? 17.0,
+      loading: () => 17.0,
+      error: (Object error, StackTrace st) => 17.0,
+    );
+
     if (book.chapters.isEmpty) {
       return Scaffold(
         appBar: AppBar(
@@ -154,13 +164,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
           return Stack(
             children: [
-              // ---- Off-screen height measurer ------------------------------
+              // ---- Off-screen height measurer (keyed by fontSize for remeasure) ----
               HtmlHeightMeasurer(
                 key: ValueKey(
-                    '${chapterIdx}_${AppFontSizes.medium}_$measureWidth'),
+                    '${chapterIdx}_${fontSize}_$measureWidth'),
                 htmlContent: chapter.htmlContent,
                 width: measureWidth,
-                fontSize: AppFontSizes.medium,
+                fontSize: fontSize,
                 onHeightMeasured: (h) =>
                     _onHeightMeasured(h, pageHeight, notifier, state),
               ),
@@ -180,7 +190,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     firstChild: ReaderTopBar(
                       chapterTitle: chapter.title,
                       onBack: () => Navigator.of(context).pop(),
-                      onToc: null, // wired in Phase 4
+                      onToc: () => _showTocDialog(context, book, notifier),
                     ),
                     secondChild: const SizedBox.shrink(),
                   ),
@@ -204,12 +214,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         controller: _pageController,
                         itemCount: state.totalPages,
                         onPageChanged: (page) => notifier.goToPage(page),
-                        itemBuilder: (_, pageIndex) => ChapterPageWidget(
+                        itemBuilder: (context, pageIndex) => ChapterPageWidget(
                           htmlContent: chapter.htmlContent,
                           pageIndex: pageIndex,
                           pageHeight: pageHeight,
                           pageWidth: pageWidth,
-                          fontSize: AppFontSizes.medium,
+                          fontSize: fontSize,
                         ),
                       ),
                     ),
@@ -244,6 +254,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           );
         },
       ),
+    );
+  }
+
+  /// Show TOC as a modal
+  void _showTocDialog(
+    BuildContext context,
+    ParsedBook book,
+    ReaderController notifier,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => TocScreen(
+        book: book,
+        onChapterSelected: (chapterIndex) {
+          notifier.goToChapter(chapterIndex);
+        },
+      ),
+      isScrollControlled: true,
+      useSafeArea: true,
     );
   }
 }
