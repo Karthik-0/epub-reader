@@ -372,29 +372,29 @@ Use `SelectionArea` with a `contextMenuBuilder` that returns a custom widget sho
 - [x] Tap on book tile → navigate to `ReaderScreen` with `bookId`
 - [x] **Test with 5 EPUBs** of varying complexity (see section 9). Fix parsing edge cases as they come up.
 
-### Phase 3 — Reader Core (3 days)
+### Phase 3 — Reader Core (3 days) ✅
 
 This is the meatiest phase. Take it in sub-steps.
 
 **3a. Display a chapter (1 day)**
-- [ ] `ReaderScreen` accepts `bookId`, loads `ParsedBook` (re-parse from disk on open — do not store full chapter HTML in DB; it is regenerated)
-- [ ] Show current chapter as `flutter_html` inside a `SingleChildScrollView`
-- [ ] Top app bar with back button + chapter title
-- [ ] Bottom bar with: previous chapter, next chapter, chapter index display
+- [x] `ReaderScreen` accepts `bookId`, loads `ParsedBook` (re-parse from disk on open — do not store full chapter HTML in DB; it is regenerated)
+- [x] Show current chapter as `flutter_html` inside a `SingleChildScrollView`
+- [x] Top app bar with back button + chapter title
+- [x] Bottom bar with: previous chapter, next chapter, chapter index display
 
 **3b. Pagination (1.5 days)**
-- [ ] Build `PaginationEngine` that, given chapter HTML and a page size (LayoutBuilder constraints + font size), computes total height by rendering offscreen
-- [ ] Convert "scroll position" into "page index" and vice versa
-- [ ] Replace `SingleChildScrollView` with a `PageView.builder` where each page is a clipped slice of the rendered chapter (use `Transform.translate` to offset the same rendered widget)
-- [ ] Swipe left/right between pages within a chapter
-- [ ] At last page of chapter → swipe right loads next chapter at page 0
-- [ ] At first page of chapter → swipe left loads previous chapter at last page
-- [ ] Tap zones: left third = previous page, right third = next page, middle = toggle toolbars
+- [x] Build `PaginationEngine` that, given chapter HTML and a page size (LayoutBuilder constraints + font size), computes total height by rendering offscreen
+- [x] Convert "scroll position" into "page index" and vice versa
+- [x] Replace `SingleChildScrollView` with a `PageView.builder` where each page is a clipped slice of the rendered chapter (use `Transform.translate` to offset the same rendered widget)
+- [x] Swipe left/right between pages within a chapter
+- [x] At last page of chapter → swipe right loads next chapter at page 0
+- [x] At first page of chapter → swipe left loads previous chapter at last page
+- [x] Tap zones: left third = previous page, right third = next page, middle = toggle toolbars
 
 **3c. Persist reading position (0.5 day)**
-- [ ] On every page change, debounce 500ms then save `(chapterIndex, charOffset)` to `Books` row via `updateLastPosition`
-- [ ] On reader open, load `lastChapterIndex` + `lastPageInChapter` and start there
-- [ ] Compute `progressPercent` as `(charsReadSoFar / totalChars) * 100`
+- [x] On every page change, debounce 500ms then save `(chapterIndex, charOffset)` to `Books` row via `updateLastPosition`
+- [x] On reader open, load `lastChapterIndex` + `lastPageInChapter` and start there
+- [x] Compute `progressPercent` as `(charsReadSoFar / totalChars) * 100`
 
 ### Phase 4 — Font Size and TOC (1 day)
 
