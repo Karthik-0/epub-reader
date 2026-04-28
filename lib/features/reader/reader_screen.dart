@@ -86,7 +86,28 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(leading: const BackButton()),
-        body: Center(child: Text('Error loading book: $e')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading book',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '$e',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       data: (book) => _buildReader(context, state, notifier, book),
     );

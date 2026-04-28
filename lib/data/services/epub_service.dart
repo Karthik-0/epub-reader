@@ -82,7 +82,14 @@ class EpubService {
 
   /// Re-parse an already-imported EPUB from disk, using the DB record for metadata.
   Future<ParsedBook> reparseFromDisk(Book dbBook) async {
-    final bytes = await File(dbBook.filePath).readAsBytes();
+    final file = File(dbBook.filePath);
+    if (!file.existsSync()) {
+      throw Exception(
+          'EPUB file not found: ${dbBook.filePath}\n\n'
+          'The file may have been deleted or moved. '
+          'Try reimporting the book.');
+    }
+    final bytes = await file.readAsBytes();
     final book = await epubx.EpubReader.readBook(bytes);
 
     final readingOrder = book.Schema?.Package?.Spine?.Items ?? [];
