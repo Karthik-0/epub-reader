@@ -7,7 +7,7 @@ import '../../../core/constants.dart';
 import '../../../core/theme.dart';
 import '../../../data/db/database.dart';
 import '../../../data/repositories/book_repository.dart';
-import '../../reader/reader_screen.dart';
+import '../../reader/readium_reader_screen.dart';
 
 class BookTile extends ConsumerWidget {
   final Book book;
@@ -19,10 +19,20 @@ class BookTile extends ConsumerWidget {
 
     return GestureDetector(
       onLongPress: () => _showDeleteDialog(context, ref),
-      onTap: () {
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (c) => ReaderScreen(bookId: book.id),
-        ));
+      onTap: () async {
+        if (!context.mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (c) => ReadiumReaderScreen(
+              bookId: book.id,
+              bookTitle: book.title,
+              filePath: book.filePath,
+              initialChapterIndex: book.lastChapterIndex,
+              initialPageInChapter: book.lastPageInChapter,
+              initialProgressPercent: book.progressPercent,
+            ),
+          ),
+        );
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

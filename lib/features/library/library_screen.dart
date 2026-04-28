@@ -49,8 +49,8 @@ class LibraryScreen extends ConsumerWidget {
                 _pickAndImportEpub(context, ref);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem<String>(
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
                 value: 'add',
                 child: Text('Add Book'),
               ),

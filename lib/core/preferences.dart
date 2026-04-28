@@ -119,3 +119,30 @@ class ReaderColorModeNotifier extends AsyncNotifier<ReaderColorMode> {
     state = AsyncData(mode);
   }
 }
+
+enum EpubReaderEngine { flutter, readium }
+
+final epubReaderEngineProvider =
+    AsyncNotifierProvider<EpubReaderEngineNotifier, EpubReaderEngine>(
+      EpubReaderEngineNotifier.new,
+    );
+
+class EpubReaderEngineNotifier extends AsyncNotifier<EpubReaderEngine> {
+  static const _key = 'epub_reader_engine';
+
+  @override
+  Future<EpubReaderEngine> build() async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    final raw = prefs.getString(_key) ?? EpubReaderEngine.readium.name;
+    return EpubReaderEngine.values.firstWhere(
+      (engine) => engine.name == raw,
+      orElse: () => EpubReaderEngine.readium,
+    );
+  }
+
+  Future<void> setEngine(EpubReaderEngine engine) async {
+    final prefs = await ref.read(sharedPreferencesProvider.future);
+    await prefs.setString(_key, engine.name);
+    state = AsyncData(engine);
+  }
+}
