@@ -9,13 +9,15 @@ import '../../../core/preferences.dart';
 class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
   final String chapterTitle;
   final VoidCallback onBack;
-  final VoidCallback? onToc; // Phase 4 — pass null to disable
+  final VoidCallback? onToc;
+  final VoidCallback? onHighlights;
 
   const ReaderTopBar({
     super.key,
     required this.chapterTitle,
     required this.onBack,
     this.onToc,
+    this.onHighlights,
   });
 
   @override
@@ -64,6 +66,12 @@ class ReaderTopBar extends ConsumerWidget implements PreferredSizeWidget {
             icon: const Icon(Icons.list),
             onPressed: onToc,
             tooltip: 'Table of contents',
+          ),
+        if (onHighlights != null)
+          IconButton(
+            icon: const Icon(Icons.bookmark_outlined),
+            onPressed: onHighlights,
+            tooltip: 'Highlights',
           ),
       ],
     );

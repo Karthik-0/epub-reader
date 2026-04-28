@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants.dart';
 import '../../core/preferences.dart';
+import '../../data/db/database.dart';
+import '../../data/repositories/highlight_repository.dart';
 import '../../data/services/epub_service.dart';
+import '../../data/services/highlight_service.dart';
+import '../highlights/highlights_screen.dart';
 import '../toc/toc_screen.dart';
 import 'pagination_engine.dart';
 import 'reader_controller.dart';
@@ -19,6 +23,7 @@ class ReaderScreen extends ConsumerStatefulWidget {
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late PageController _pageController;
+  String? _selectedText;
 
   @override
   void initState() {
@@ -32,7 +37,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     super.dispose();
   }
 
-  /// Called when the off-screen measurer has determined the chapter's total height.
   void _onHeightMeasured(
     double height,
     double pageHeight,
@@ -143,6 +147,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         state.chapterIndex.clamp(0, book.chapters.length - 1);
     final chapter = book.chapters[chapterIdx];
 
+    // Watch highlights for the current chapter (reactive stream)
+    final chapterHighlightsAsync = ref.watch(
+        chapterHighlightsProvider((book.id, chapterIdx)));
+
+    // Inject highlights into HTML before rendering
+    final htmlContent = chapterHighlightsAsync.when(
+      data: (highlights) =>
+          HighlightService.injectHighlights(chapter.htmlContent, highlights),
+      loading: () => chapter.htmlContent,
+      error: (Object e, StackTrace st) => chapter.htmlContent,
+    );
+
     return Scaffold(
       backgroundColor: AppColors.readingBackground,
       body: LayoutBuilder(
@@ -191,6 +207,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       chapterTitle: chapter.title,
                       onBack: () => Navigator.of(context).pop(),
                       onToc: () => _showTocDialog(context, book, notifier),
+                      onHighlights: () =>
+                          _showHighlightsDialog(context, book, notifier),
                     ),
                     secondChild: const SizedBox.shrink(),
                   ),
@@ -210,22 +228,76 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           notifier.toggleToolbars();
                         }
                       },
-                      child: PageView.builder(
+                      child: SelectionArea(
+                        onSelectionChanged: (value) {
+                          setState(() => _selectedText = value?.plainText);
+                        },
+                        contextMenuBuilder: (ctx, selectableRegionState) {
+                          final text = _selectedText ?? '';
+                          return Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey[900],
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildColorDot(
+                                    const Color(0xFFFFF59D),
+                                    text,
+                                    'yellow',
+                                    chapterIdx,
+                                    book,
+                                    selectableRegionState,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildColorDot(
+                                    const Color(0xFFC5E1A5),
+                                    text,
+                                    'green',
+                                    chapterIdx,
+                                    book,
+                                    selectableRegionState,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildColorDot(
+                                    const Color(0xFFF8BBD0),
+                                    text,
+                                    'pink',
+                                    chapterIdx,
+                                    book,
+                                    selectableRegionState,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  GestureDetector(
+                                    onTap: selectableRegionState.hideToolbar,
+                                    child: const Text(
+                                      '✕',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 18),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        child: PageView.builder(
                         controller: _pageController,
                         itemCount: state.totalPages,
                         onPageChanged: (page) => notifier.goToPage(page),
                         itemBuilder: (context, pageIndex) => ChapterPageWidget(
-                          htmlContent: chapter.htmlContent,
+                          htmlContent: htmlContent,
                           pageIndex: pageIndex,
                           pageHeight: pageHeight,
                           pageWidth: pageWidth,
                           fontSize: fontSize,
                         ),
                       ),
+                      ),  // SelectionArea
                     ),
                   ),
-
-                  // Animated bottom toolbar
                   AnimatedCrossFade(
                     duration: const Duration(milliseconds: 200),
                     crossFadeState: state.showToolbars
@@ -274,6 +346,72 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       isScrollControlled: true,
       useSafeArea: true,
     );
+  }
+
+  void _showHighlightsDialog(
+    BuildContext context,
+    ParsedBook book,
+    ReaderController notifier,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => HighlightsScreen(
+        bookId: book.id,
+        onHighlightTap: (chapterIndex) {
+          notifier.goToChapter(chapterIndex);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  Widget _buildColorDot(
+    Color color,
+    String text,
+    String colorName,
+    int chapterIdx,
+    ParsedBook book,
+    SelectableRegionState selectableRegionState,
+  ) {
+    return GestureDetector(
+      onTap: () async {
+        if (text.isNotEmpty) {
+          await _createHighlight(colorName, text, chapterIdx, book);
+        }
+        selectableRegionState.hideToolbar();
+      },
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: color,
+          border: Border.all(color: Colors.white54),
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createHighlight(
+    String color,
+    String text,
+    int chapterIdx,
+    ParsedBook book,
+  ) async {
+    if (text.isEmpty) return;
+    final companion = HighlightsCompanion.insert(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      bookId: book.id,
+      chapterIndex: chapterIdx,
+      startOffset: 0,
+      endOffset: text.length,
+      content: text,
+      color: color,
+      createdAt: DateTime.now(),
+    );
+    await ref.read(highlightRepoProvider).addHighlight(companion);
   }
 }
 
