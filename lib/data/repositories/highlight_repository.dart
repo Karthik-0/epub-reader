@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../db/database.dart';
 
@@ -34,4 +35,9 @@ class HighlightRepository {
   }
 
   Future<void> deleteHighlight(String id) => (db.delete(db.highlights)..where((h) => h.id.equals(id))).go();
+
+  Future<void> updateHighlightColor(String id, String color) {
+    return (db.update(db.highlights)..where((h) => h.id.equals(id)))
+        .write(HighlightsCompanion(color: Value(color)));
+  }
 }

@@ -293,6 +293,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                             pageHeight: pageHeight,
                             pageWidth: pageWidth,
                             fontSize: fontSize,
+                            onHighlightTap: (id) =>
+                                _showHighlightOptionsSheet(context, id),
                           ),
                         ),
                       ),
@@ -363,6 +365,84 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           notifier.goToChapter(chapterIndex);
           Navigator.of(context).pop();
         },
+      ),
+    );
+  }
+
+  /// Shows a bottom sheet for an existing highlight (identified by [highlightId])
+  /// with options to delete or change color.
+  void _showHighlightOptionsSheet(BuildContext context, String highlightId) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Change color row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Change color',
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      for (final entry in [
+                        ('yellow', const Color(0xFFFFF59D)),
+                        ('green', const Color(0xFFC5E1A5)),
+                        ('pink', const Color(0xFFF8BBD0)),
+                      ]) ...[
+                        GestureDetector(
+                          onTap: () async {
+                            await ref
+                                .read(highlightRepoProvider)
+                                .updateHighlightColor(highlightId, entry.$1);
+                            if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: entry.$2,
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title:
+                  const Text('Delete highlight', style: TextStyle(color: Colors.red)),
+              onTap: () async {
+                await ref.read(highlightRepoProvider).deleteHighlight(highlightId);
+                if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

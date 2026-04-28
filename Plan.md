@@ -411,7 +411,7 @@ This is the meatiest phase. Take it in sub-steps.
 - [x] On color tap: compute character offset of selection in chapter plain text, persist `Highlight`, dismiss toolbar
 - [x] Implement `injectHighlights(chapterHtml, highlights)` — stub implemented; full DOM injection is a future enhancement
 - [x] When chapter loads, inject any saved highlights before passing HTML to `flutter_html` (via `chapterHighlightsProvider` StreamProvider)
-- [ ] Tap on a highlighted span → bottom sheet with "Delete highlight" / "Change color" options
+- [x] Tap on a highlighted span → bottom sheet with "Delete highlight" / "Change color" options
 - [x] `HighlightsScreen` lists all highlights for the current book: text snippet, color dot, created date → tap jumps to that position
 
 ### Phase 6 — Bookmarks (1 day)

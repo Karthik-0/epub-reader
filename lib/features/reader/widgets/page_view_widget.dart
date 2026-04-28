@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import '../../../core/constants.dart';
+import '../../../data/services/highlight_service.dart';
 
 /// Renders a single page of a chapter by clipping and translating the
 /// full chapter HTML to the correct vertical slice.
@@ -14,6 +15,10 @@ class ChapterPageWidget extends StatelessWidget {
   final double pageWidth;
   final double fontSize;
 
+  /// Called when the user taps a highlighted span. The argument is the
+  /// highlight's database id.
+  final void Function(String highlightId)? onHighlightTap;
+
   const ChapterPageWidget({
     super.key,
     required this.htmlContent,
@@ -21,6 +26,7 @@ class ChapterPageWidget extends StatelessWidget {
     required this.pageHeight,
     required this.pageWidth,
     required this.fontSize,
+    this.onHighlightTap,
   });
 
   @override
@@ -41,11 +47,44 @@ class ChapterPageWidget extends StatelessWidget {
               child: Html(
                 data: htmlContent,
                 style: _buildStyle(),
+                extensions: [
+                  _buildMarkExtension(),
+                ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Custom extension that renders `<mark data-highlight-id="..." data-color="...">` as
+  /// a colored, tappable inline widget.
+  TagExtension _buildMarkExtension() {
+    return TagExtension(
+      tagsToExtend: {'mark'},
+      builder: (extContext) {
+        final id = extContext.attributes['data-highlight-id'] ?? '';
+        final colorName = extContext.attributes['data-color'] ?? 'yellow';
+        final text = extContext.element?.text ?? '';
+        final bgColor =
+            Color(HighlightService.hexToColorInt(HighlightService.colorToHex(colorName)));
+
+        return GestureDetector(
+          onTap: id.isNotEmpty ? () => onHighlightTap?.call(id) : null,
+          child: Container(
+            color: bgColor,
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: fontSize,
+                color: AppColors.readingText,
+                height: 1.6,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
