@@ -7,6 +7,7 @@ typedef HighlightColorCallback = Future<void> Function(String color);
 class HighlightToolbar extends StatelessWidget {
   final HighlightColorCallback onHighlight;
   final VoidCallback onCancel;
+  final bool enabled;
   final VoidCallback? onNote;
   final VoidCallback? onShare;
 
@@ -14,6 +15,7 @@ class HighlightToolbar extends StatelessWidget {
     super.key,
     required this.onHighlight,
     required this.onCancel,
+    this.enabled = true,
     this.onNote,
     this.onShare,
   });
@@ -48,18 +50,19 @@ class HighlightToolbar extends StatelessWidget {
             ]) ...[
               _ColorButton(
                 color: color.$2,
+                enabled: enabled,
                 onTap: () => _handleColorTap(color.$1),
               ),
               const SizedBox(width: 8),
             ],
             _ActionButton(
               icon: Icons.sticky_note_2_outlined,
-              onTap: onNote,
+              onTap: enabled ? onNote : null,
             ),
             const SizedBox(width: 6),
             _ActionButton(
               icon: Icons.share_outlined,
-              onTap: onShare,
+              onTap: enabled ? onShare : null,
             ),
           ],
         ),
@@ -75,21 +78,37 @@ class HighlightToolbar extends StatelessWidget {
 
 class _ColorButton extends StatelessWidget {
   final Color color;
+  final bool enabled;
   final VoidCallback onTap;
 
-  const _ColorButton({required this.color, required this.onTap});
+  const _ColorButton({
+    required this.color,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: color,
-          border: Border.all(color: const Color(0x14000000), width: 1),
-          shape: BoxShape.circle,
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Material(
+        color: Colors.transparent,
+        child: InkResponse(
+          onTap: enabled ? onTap : null,
+          radius: 22,
+          containedInkWell: true,
+          child: Center(
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: enabled ? color : color.withValues(alpha: 0.4),
+                border: Border.all(color: const Color(0x1F000000), width: 1),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -105,12 +124,25 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(icon, size: 18, color: readerTheme.secondaryText),
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Material(
+        color: Colors.transparent,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 20,
+          containedInkWell: true,
+          child: Center(
+            child: Icon(
+              icon,
+              size: 20,
+              color: onTap == null
+                  ? readerTheme.secondaryText.withValues(alpha: 0.45)
+                  : readerTheme.secondaryText,
+            ),
+          ),
+        ),
       ),
     );
   }

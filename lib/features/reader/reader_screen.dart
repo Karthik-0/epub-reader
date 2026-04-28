@@ -310,9 +310,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                 children: [
                                   SelectionArea(
                                     onSelectionChanged: (value) {
-                                      _selectedText = value?.plainText;
+                                      _selectedText = value?.plainText.trim();
                                     },
                                     contextMenuBuilder: (ctx, selectableRegionState) {
+                                      final selectedText = (_selectedText ?? '')
+                                          .trim();
                                       TextSelectionToolbarAnchors anchors;
                                       try {
                                         anchors = selectableRegionState
@@ -331,10 +333,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                             anchors.primaryAnchor,
                                         children: [
                                           HighlightToolbar(
+                                            enabled: selectedText.isNotEmpty,
                                             onHighlight: (color) =>
                                                 _createHighlight(
                                                   color,
-                                                  _selectedText ?? '',
+                                                  selectedText,
                                                   chapterIdx,
                                                   book,
                                                   state,
