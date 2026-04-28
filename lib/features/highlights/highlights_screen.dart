@@ -7,7 +7,7 @@ import '../../../data/repositories/highlight_repository.dart';
 
 class HighlightsScreen extends ConsumerWidget {
   final String bookId;
-  final Function(int chapterIndex) onHighlightTap;
+  final ValueChanged<Highlight> onHighlightTap;
 
   const HighlightsScreen({
     super.key,
@@ -17,8 +17,9 @@ class HighlightsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final highlightsStream =
-        ref.watch(highlightRepoProvider).getHighlightsForBook(bookId);
+    final highlightsStream = ref
+        .watch(highlightRepoProvider)
+        .getHighlightsForBook(bookId);
     final readerTheme = Theme.of(context).extension<ReaderTheme>()!;
 
     return Scaffold(
@@ -73,8 +74,7 @@ class HighlightsScreen extends ConsumerWidget {
                 child: _HighlightListItem(
                   highlight: highlight,
                   onTap: () {
-                    onHighlightTap(highlight.chapterIndex);
-                    Navigator.pop(context);
+                    onHighlightTap(highlight);
                   },
                   onDelete: () {
                     ref
@@ -113,9 +113,7 @@ class _HighlightListItem extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: readerTheme.pageBackground,
-          border: Border(
-            bottom: BorderSide(color: readerTheme.divider),
-          ),
+          border: Border(bottom: BorderSide(color: readerTheme.divider)),
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
@@ -141,8 +139,8 @@ class _HighlightListItem extends StatelessWidget {
                   Text(
                     'Chapter ${highlight.chapterIndex + 1} • ${_formatDate(highlight.createdAt)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: readerTheme.secondaryText,
-                        ),
+                      color: readerTheme.secondaryText,
+                    ),
                   ),
                 ],
               ),

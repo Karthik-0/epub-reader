@@ -33,30 +33,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   String? _selectedText;
   Offset? _pointerDownPosition;
   DateTime? _pointerDownAt;
-  String _currentTime = '';
-  Timer? _clockTimer;
   Timer? _chapterTransitionTimer;
   bool _chapterTransitionGuard = false;
-
-  String _formatTime(DateTime now) {
-    final h = now.hour.toString().padLeft(2, '0');
-    final m = now.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    _currentTime = _formatTime(DateTime.now());
-    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() => _currentTime = _formatTime(DateTime.now()));
-    });
   }
 
   @override
   void dispose() {
-    _clockTimer?.cancel();
     _chapterTransitionTimer?.cancel();
     _pageController.dispose();
     super.dispose();
@@ -170,8 +157,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     if (down == null || downAt == null) return;
 
     final delta = event.localPosition - down;
-    final distance = delta.distance;
-    final elapsed = DateTime.now().difference(downAt);
     final isHorizontalSwipe =
         delta.dx.abs() > 48 && delta.dx.abs() > delta.dy.abs() * 1.25;
 
@@ -195,10 +180,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         notifier.goToChapter(chapterIdx - 1, lastPage: true);
         return;
       }
-    }
-
-    if (distance <= 24 && elapsed < const Duration(milliseconds: 450)) {
-      notifier.toggleToolbars();
     }
   }
 
@@ -247,8 +228,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       error: (Object e, StackTrace st) => chapter.htmlContent,
     );
 
-    final locationLabel = _buildLocationLabel(book, chapterIdx, state);
-
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: readerTheme.overlayStyle.copyWith(
         statusBarColor: readerTheme.pageBackground,
@@ -264,11 +243,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   constraints.maxHeight -
                   readerTheme.statusStripHeight -
                   AppDimensions.readingAreaTopPadding -
-                  AppDimensions.readingAreaBottomPadding -
-                  (state.showToolbars
-                      ? AppDimensions.chromeTopHeight +
-                            AppDimensions.chromeBottomHeight
-                      : 0);
+                  AppDimensions.readingAreaBottomPadding;
               final verticalBleed = ChapterPageWidget.pageVerticalBleed(
                 fontSize,
                 readerTheme.lineHeight,
@@ -301,55 +276,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   ),
                   Column(
                     children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOut,
-                        height: state.showToolbars
-                            ? AppDimensions.chromeTopHeight
-                            : 0,
-                        child: SingleChildScrollView(
-                          physics: const NeverScrollableScrollPhysics(),
-                          child: SizedBox(
-                            height: AppDimensions.chromeTopHeight,
-                            child: ReaderTopBar(
-                              chapterTitle: chapter.title,
-                              onBack: () => Navigator.of(context).pop(),
-                              onTypography: () => _showTypographySheet(context),
-                              onMenuAction: (action) => _handleMenuAction(
-                                context,
-                                action,
-                                book,
-                                notifier,
-                              ),
-                              isBookmarked: isBookmarked,
-                              onToggleBookmark: () => _toggleBookmark(
-                                book,
-                                chapterIdx,
-                                state,
-                                chapter,
-                              ),
-                            ),
-                          ),
-                        ),
+                      const SizedBox(
+                        height: AppDimensions.readingAreaTopPadding,
                       ),
-                      if (!state.showToolbars)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            top: AppDimensions.readingAreaTopPadding,
-                          ),
-                          child: Text(
-                            _currentTime,
-                            style: TextStyle(
-                              fontSize: AppFontSizes.status,
-                              color: readerTheme.secondaryText,
-                              fontFamily: ReaderTypography.georgia,
-                            ),
-                          ),
-                        )
-                      else
-                        const SizedBox(
-                          height: AppDimensions.readingAreaTopPadding,
-                        ),
                       Expanded(
                         child: Listener(
                           behavior: HitTestBehavior.translucent,
@@ -408,6 +337,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                                                   _selectedText ?? '',
                                                   chapterIdx,
                                                   book,
+                                                  state,
                                                 ),
                                             onCancel: selectableRegionState
                                                 .hideToolbar,
@@ -470,33 +400,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       const SizedBox(
                         height: AppDimensions.readingAreaBottomPadding,
                       ),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: state.showToolbars
-                            ? ReaderBottomBar(
-                                key: const ValueKey('reader-bottom-bar'),
-                                currentPage: state.currentPage,
-                                totalPages: state.totalPages,
-                                globalPage: state.globalPage(
-                                  chapterIdx,
-                                  state.currentPage,
-                                ),
-                                globalTotalPages: state.chapterPageCounts.values
-                                    .fold(0, (a, b) => a + b),
-                                chapterIndex: chapterIdx,
-                                totalChapters: book.chapters.length,
-                                locationLabel: locationLabel,
-                                onSeek: state.totalPages > 1
-                                    ? (value) =>
-                                          notifier.goToPage(value.round())
-                                    : null,
-                              )
-                            : ReaderStatusStrip(
-                                key: const ValueKey('reader-status-strip'),
-                                text: locationLabel,
-                              ),
-                      ),
                     ],
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: ReaderTopBar(
+                      chapterTitle: chapter.title,
+                      onBack: () => Navigator.of(context).pop(),
+                      onTypography: () => _showTypographySheet(context),
+                      onMenuAction: (action) =>
+                          _handleMenuAction(context, action, book, notifier),
+                      isBookmarked: isBookmarked,
+                      onToggleBookmark: () =>
+                          _toggleBookmark(book, chapterIdx, state, chapter),
+                    ),
                   ),
                 ],
               );
@@ -505,31 +424,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ),
       ),
     );
-  }
-
-  String _buildLocationLabel(
-    ParsedBook book,
-    int chapterIdx,
-    ReaderState state,
-  ) {
-    final progress = _computeProgressPercent(book, chapterIdx, state);
-    final globalPage = state.globalPage(chapterIdx, state.currentPage);
-    final globalTotal = state.chapterPageCounts.values.fold(0, (a, b) => a + b);
-    return 'Page $globalPage of ${globalTotal > 0 ? globalTotal : state.totalPages} · $progress%';
-  }
-
-  int _computeProgressPercent(
-    ParsedBook book,
-    int chapterIdx,
-    ReaderState state,
-  ) {
-    final chapterFraction = book.chapters.isEmpty
-        ? 0.0
-        : chapterIdx / book.chapters.length;
-    final pageFraction = state.totalPages > 0
-        ? (state.currentPage + 1) / state.totalPages / book.chapters.length
-        : 0.0;
-    return ((chapterFraction + pageFraction) * 100).clamp(0, 100).round();
   }
 
   void _handleMenuAction(
@@ -730,8 +624,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         pageBuilder: (routeContext, animation, secondaryAnimation) =>
             HighlightsScreen(
               bookId: book.id,
-              onHighlightTap: (chapterIndex) {
-                notifier.goToChapter(chapterIndex);
+              onHighlightTap: (highlight) {
+                _goToHighlight(highlight, book, notifier);
                 Navigator.of(routeContext).pop();
               },
             ),
@@ -750,6 +644,31 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             },
       ),
     );
+  }
+
+  void _goToHighlight(
+    Highlight highlight,
+    ParsedBook book,
+    ReaderController notifier,
+  ) {
+    final chapterIndex = highlight.chapterIndex.clamp(
+      0,
+      book.chapters.length - 1,
+    );
+    final plainText = HighlightService.extractPlainText(
+      book.chapters[chapterIndex].htmlContent,
+    );
+
+    var offset = highlight.startOffset;
+    if (offset <= 0 && highlight.content.trim().isNotEmpty) {
+      final foundIndex = plainText.indexOf(highlight.content.trim());
+      if (foundIndex >= 0) offset = foundIndex;
+    }
+
+    final fraction = plainText.isEmpty
+        ? 0.0
+        : offset.clamp(0, plainText.length) / plainText.length;
+    notifier.goToChapterFraction(chapterIndex, fraction);
   }
 
   void _showHighlightOptionsSheet(BuildContext context, String highlightId) {
@@ -839,14 +758,25 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     String text,
     int chapterIdx,
     ParsedBook book,
+    ReaderState state,
   ) async {
     if (text.isEmpty) return;
+    final plainText = HighlightService.extractPlainText(
+      book.chapters[chapterIdx].htmlContent,
+    );
+    final pageStart = state.totalPages > 0
+        ? ((state.currentPage / state.totalPages) * plainText.length).round()
+        : 0;
+    var startOffset = plainText.indexOf(text, pageStart);
+    if (startOffset < 0) startOffset = plainText.indexOf(text);
+    if (startOffset < 0) startOffset = pageStart.clamp(0, plainText.length);
+
     final companion = HighlightsCompanion.insert(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       bookId: book.id,
       chapterIndex: chapterIdx,
-      startOffset: 0,
-      endOffset: text.length,
+      startOffset: startOffset,
+      endOffset: (startOffset + text.length).clamp(0, plainText.length),
       content: text,
       color: color,
       createdAt: DateTime.now(),

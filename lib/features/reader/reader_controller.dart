@@ -30,16 +30,15 @@ class ReaderState {
     bool? showToolbars,
     bool? pendingLastPage,
     Map<int, int>? chapterPageCounts,
-  }) =>
-      ReaderState(
-        bookAsync: bookAsync ?? this.bookAsync,
-        chapterIndex: chapterIndex ?? this.chapterIndex,
-        currentPage: currentPage ?? this.currentPage,
-        totalPages: totalPages ?? this.totalPages,
-        showToolbars: showToolbars ?? this.showToolbars,
-        pendingLastPage: pendingLastPage ?? this.pendingLastPage,
-        chapterPageCounts: chapterPageCounts ?? this.chapterPageCounts,
-      );
+  }) => ReaderState(
+    bookAsync: bookAsync ?? this.bookAsync,
+    chapterIndex: chapterIndex ?? this.chapterIndex,
+    currentPage: currentPage ?? this.currentPage,
+    totalPages: totalPages ?? this.totalPages,
+    showToolbars: showToolbars ?? this.showToolbars,
+    pendingLastPage: pendingLastPage ?? this.pendingLastPage,
+    chapterPageCounts: chapterPageCounts ?? this.chapterPageCounts,
+  );
 
   int globalPage(int chapterIdx, int page) {
     int offset = 0;
@@ -55,6 +54,7 @@ class ReaderController extends StateNotifier<ReaderState> {
   final String bookId;
   Timer? _saveTimer;
   int? _pendingSavedPage;
+  double? _pendingPageFraction;
 
   ReaderController(this._ref, this.bookId) : super(const ReaderState()) {
     _load();
@@ -63,7 +63,9 @@ class ReaderController extends StateNotifier<ReaderState> {
   Future<void> _load() async {
     try {
       final dbBook = await _ref.read(bookRepoProvider).getBookById(bookId);
-      final parsedBook = await _ref.read(epubServiceProvider).reparseFromDisk(dbBook);
+      final parsedBook = await _ref
+          .read(epubServiceProvider)
+          .reparseFromDisk(dbBook);
       _pendingSavedPage = dbBook.lastPageInChapter;
       state = state.copyWith(
         bookAsync: AsyncValue.data(parsedBook),
@@ -80,6 +82,12 @@ class ReaderController extends StateNotifier<ReaderState> {
     if (_pendingSavedPage != null && chapterIndex == state.chapterIndex) {
       targetPage = _pendingSavedPage!.clamp(0, total - 1);
       _pendingSavedPage = null;
+    } else if (_pendingPageFraction != null &&
+        chapterIndex == state.chapterIndex) {
+      targetPage = (_pendingPageFraction!.clamp(0.0, 1.0) * (total - 1))
+          .round()
+          .clamp(0, total - 1);
+      _pendingPageFraction = null;
     } else if (state.pendingLastPage && chapterIndex == state.chapterIndex) {
       targetPage = total - 1;
     } else if (chapterIndex == state.chapterIndex) {
@@ -126,6 +134,29 @@ class ReaderController extends StateNotifier<ReaderState> {
     _scheduleSave();
   }
 
+  void goToChapterFraction(int chapterIndex, double fraction) {
+    final book = state.bookAsync.valueOrNull;
+    final maxChapterIndex = (book?.chapters.length ?? 1) - 1;
+    final targetChapter = chapterIndex.clamp(0, maxChapterIndex);
+    final targetFraction = fraction.clamp(0.0, 1.0);
+    final cachedTotal = state.chapterPageCounts[targetChapter];
+    final targetPage = cachedTotal == null
+        ? 0
+        : (targetFraction * (cachedTotal - 1)).round().clamp(
+            0,
+            cachedTotal - 1,
+          );
+
+    _pendingPageFraction = cachedTotal == null ? targetFraction : null;
+    state = state.copyWith(
+      chapterIndex: targetChapter,
+      currentPage: targetPage,
+      totalPages: cachedTotal ?? 1,
+      pendingLastPage: false,
+    );
+    _scheduleSave();
+  }
+
   void nextPage() {
     final book = state.bookAsync.valueOrNull;
     if (book == null) return;
@@ -156,10 +187,22 @@ class ReaderController extends StateNotifier<ReaderState> {
   Future<void> _savePosition() async {
     final book = state.bookAsync.valueOrNull;
     if (book == null) return;
-    final totalChars = book.chapters.fold<int>(0, (sum, ch) => sum + ch.htmlContent.length);
-    final charsRead = book.chapters.take(state.chapterIndex).fold<int>(0, (sum, ch) => sum + ch.htmlContent.length);
+    final totalChars = book.chapters.fold<int>(
+      0,
+      (sum, ch) => sum + ch.htmlContent.length,
+    );
+    final charsRead = book.chapters
+        .take(state.chapterIndex)
+        .fold<int>(0, (sum, ch) => sum + ch.htmlContent.length);
     final progress = totalChars > 0 ? (charsRead / totalChars) * 100.0 : 0.0;
-    await _ref.read(bookRepoProvider).updateLastPosition(bookId, state.chapterIndex, state.currentPage, progress);
+    await _ref
+        .read(bookRepoProvider)
+        .updateLastPosition(
+          bookId,
+          state.chapterIndex,
+          state.currentPage,
+          progress,
+        );
   }
 
   @override
@@ -170,6 +213,7 @@ class ReaderController extends StateNotifier<ReaderState> {
   }
 }
 
-final readerControllerProvider = StateNotifierProvider.family<ReaderController, ReaderState, String>(
-  (ref, bookId) => ReaderController(ref, bookId),
-);
+final readerControllerProvider =
+    StateNotifierProvider.family<ReaderController, ReaderState, String>(
+      (ref, bookId) => ReaderController(ref, bookId),
+    );
