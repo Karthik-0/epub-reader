@@ -26,6 +26,9 @@ class MainActivity : FlutterActivity() {
 				val initialChapterIndex = call.argument<Int>("initialChapterIndex") ?: 0
 				val initialPageInChapter = call.argument<Int>("initialPageInChapter") ?: 0
 				val initialProgressPercent = call.argument<Double>("initialProgressPercent") ?: 0.0
+				val initialChapterFraction = call.argument<Double>("initialChapterFraction")
+				val initialLocatorJson = call.argument<String>("initialLocatorJson")
+				val highlightsJson = call.argument<String>("highlightsJson")
 				val fontSize = call.argument<Double>("fontSize") ?: 17.0
 				val fontFamily = call.argument<String>("fontFamily") ?: "Iowan Old Style"
 				val colorMode = call.argument<String>("colorMode") ?: "sepia"
@@ -42,6 +45,15 @@ class MainActivity : FlutterActivity() {
 					putExtra(ReadiumReaderActivity.EXTRA_INITIAL_CHAPTER_INDEX, initialChapterIndex)
 					putExtra(ReadiumReaderActivity.EXTRA_INITIAL_PAGE_IN_CHAPTER, initialPageInChapter)
 					putExtra(ReadiumReaderActivity.EXTRA_INITIAL_PROGRESS_PERCENT, initialProgressPercent)
+					if (initialChapterFraction != null) {
+						putExtra(ReadiumReaderActivity.EXTRA_INITIAL_CHAPTER_FRACTION, initialChapterFraction)
+					}
+					if (!initialLocatorJson.isNullOrBlank()) {
+						putExtra(ReadiumReaderActivity.EXTRA_INITIAL_LOCATOR_JSON, initialLocatorJson)
+					}
+					if (!highlightsJson.isNullOrBlank()) {
+						putExtra(ReadiumReaderActivity.EXTRA_HIGHLIGHTS_JSON, highlightsJson)
+					}
 					putExtra(ReadiumReaderActivity.EXTRA_FONT_SIZE, fontSize)
 					putExtra(ReadiumReaderActivity.EXTRA_FONT_FAMILY, fontFamily)
 					putExtra(ReadiumReaderActivity.EXTRA_COLOR_MODE, colorMode)

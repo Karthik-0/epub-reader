@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +47,10 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
   late int _chapterIndex;
   late int _pageInChapter;
   late double _progressPercent;
+  double? _chapterFraction;
+  String? _initialLocatorJson;
+  String? _currentLocatorJson;
+  String? _nativeBookmarkSnippet;
 
   ParsedBook? _cachedParsedBook;
 
@@ -78,6 +84,7 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
     final chapterIndex = (args['chapterIndex'] as num?)?.toInt() ?? 0;
     final pageInChapter = (args['pageInChapter'] as num?)?.toInt() ?? 0;
     final progressPercent = (args['progressPercent'] as num?)?.toDouble() ?? 0.0;
+    _currentLocatorJson = args['locatorJson'] as String?;
 
     _chapterIndex = chapterIndex;
     _pageInChapter = pageInChapter;
@@ -90,6 +97,10 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
 
     if (call.method == 'onReadiumToolbarAction') {
       final action = (args['action'] as String?) ?? '';
+      // Cache the native snippet captured from the WebView at bookmark time
+      if (action == 'bookmark' || action == 'bookmark_add') {
+        _nativeBookmarkSnippet = (args['snippetText'] as String?)?.trim();
+      }
       await _handleToolbarAction(action);
       return;
     }
@@ -102,22 +113,95 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
   Future<void> _addHighlightFromNative(Map<String, dynamic> args) async {
     final chapterIndex = (args['chapterIndex'] as num?)?.toInt() ?? _chapterIndex;
     final color = ((args['color'] as String?) ?? 'yellow').toLowerCase();
-    final text = (args['text'] as String?)?.trim() ?? '';
-    if (text.isEmpty) return;
+    final text = (args['text'] as String?)?.trim() ?? 'Highlighted text';
+    final content = text.isEmpty ? 'Highlighted text' : text;
+
+    int startOffset = 0;
+    int endOffset = text.length;
+    try {
+      final parsed = await _loadParsedBook();
+      final chapterIdx = chapterIndex.clamp(0, parsed.chapters.length - 1);
+      final chapterPlain = HighlightService.extractPlainText(
+        parsed.chapters[chapterIdx].htmlContent,
+      );
+      final found = chapterPlain.indexOf(content);
+      if (found >= 0) {
+        startOffset = found;
+        endOffset = (found + content.length).clamp(0, chapterPlain.length);
+      }
+    } catch (_) {
+      // Keep defaults if we fail to parse chapter text.
+    }
 
     final nowId = DateTime.now().millisecondsSinceEpoch.toString();
-    await ref.read(highlightRepoProvider).addHighlight(
-      HighlightsCompanion.insert(
-        id: nowId,
-        bookId: widget.bookId,
-        chapterIndex: chapterIndex,
-        startOffset: 0,
-        endOffset: text.length,
-        content: text,
-        color: color,
-        createdAt: DateTime.now(),
-      ),
-    );
+    final repo = ref.read(highlightRepoProvider);
+    try {
+      await repo.addHighlight(
+        HighlightsCompanion.insert(
+          id: nowId,
+          bookId: widget.bookId,
+          chapterIndex: chapterIndex,
+          startOffset: startOffset,
+          endOffset: endOffset,
+          content: content,
+          color: color,
+          progressPercent: Value((args['progressPercent'] as num?)?.toDouble()),
+          locatorJson: Value(args['locatorJson'] as String?),
+          createdAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      await repo.addHighlight(
+        HighlightsCompanion.insert(
+          id: nowId,
+          bookId: widget.bookId,
+          chapterIndex: chapterIndex,
+          startOffset: startOffset,
+          endOffset: endOffset,
+          content: content,
+          color: color,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+  }
+
+  Future<String> _buildHighlightsJson() async {
+    final parsed = await _loadParsedBook();
+    final highlights = await ref
+        .read(highlightRepoProvider)
+        .getHighlightsForBookOnce(widget.bookId);
+
+    final payload = <Map<String, dynamic>>[];
+    for (final h in highlights) {
+      final chapterIndex = h.chapterIndex.clamp(0, parsed.chapters.length - 1);
+      final plainText = HighlightService.extractPlainText(
+        parsed.chapters[chapterIndex].htmlContent,
+      );
+
+      int offset = h.startOffset;
+      if (offset <= 0 && h.content.trim().isNotEmpty) {
+        final found = plainText.indexOf(h.content.trim());
+        if (found >= 0) {
+          offset = found;
+        }
+      }
+      final fraction = plainText.isEmpty
+          ? 0.0
+          : (offset.clamp(0, plainText.length) / plainText.length)
+                .toDouble()
+                .clamp(0.0, 1.0);
+
+      payload.add({
+        'id': h.id,
+        'chapterIndex': chapterIndex,
+        'fraction': fraction,
+        'color': h.color,
+        'locatorJson': h.locatorJson,
+      });
+    }
+
+    return jsonEncode(payload);
   }
 
   Future<void> _handleToolbarAction(String action) async {
@@ -168,25 +252,167 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
         .isPageBookmarked(widget.bookId, chapterIdx, page);
     if (alreadyBookmarked) return;
 
-    final parsed = await _loadParsedBook();
-    final chapterIdxSafe = chapterIdx.clamp(0, parsed.chapters.length - 1);
-    final chapter = parsed.chapters[chapterIdxSafe];
-    final plainText = HighlightService.extractPlainText(chapter.htmlContent);
-    final snippet = plainText.replaceAll(RegExp(r'\s+'), ' ').trim();
-    final trimmed = snippet.isEmpty
-        ? 'Chapter ${chapterIdxSafe + 1}'
-        : (snippet.length > 80 ? snippet.substring(0, 80) : snippet);
+    var trimmed = 'Chapter ${chapterIdx + 1}';
+    try {
+      // 1. Use snippet captured directly from native WebView (most accurate)
+      final nativeSnippet = _sanitizeSnippet(_nativeBookmarkSnippet ?? '');
+      if (nativeSnippet.isNotEmpty) {
+        trimmed = nativeSnippet;
+      } else {
+        // 2. Fall back to locator text context (populated for selection-based positions)
+        final fromLocator = _extractSnippetFromLocatorJson(_currentLocatorJson);
+        if (fromLocator != null && fromLocator.isNotEmpty) {
+          trimmed = fromLocator;
+        } else {
+          // 3. Last resort: chapter text with progression offset
+          final parsed = await _loadParsedBook();
+          final chapterIdxSafe = chapterIdx.clamp(0, parsed.chapters.length - 1);
+          final chapter = parsed.chapters[chapterIdxSafe];
+          final chapterText = _extractReadableTextFromHtml(chapter.htmlContent);
+          final chapterProgression = _extractChapterProgressionFromLocatorJson(
+            _currentLocatorJson,
+          );
+          final sanitized = chapterProgression == null
+              ? _sanitizeSnippet(chapterText)
+              : _snippetAroundProgression(chapterText, chapterProgression);
+          trimmed = sanitized.isEmpty ? 'Chapter ${chapterIdxSafe + 1}' : sanitized;
+        }
+      }
+    } catch (_) {
+      // Keep fallback chapter snippet if parsing fails.
+    } finally {
+      _nativeBookmarkSnippet = null;
+    }
 
-    await ref.read(bookmarkRepoProvider).addBookmark(
-      BookmarksCompanion.insert(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        bookId: widget.bookId,
-        chapterIndex: chapterIdx,
-        pageInChapter: page,
-        snippet: trimmed,
-        createdAt: DateTime.now(),
-      ),
-    );
+    final repo = ref.read(bookmarkRepoProvider);
+    final nowId = DateTime.now().millisecondsSinceEpoch.toString();
+    try {
+      await repo.addBookmark(
+        BookmarksCompanion.insert(
+          id: nowId,
+          bookId: widget.bookId,
+          chapterIndex: chapterIdx,
+          pageInChapter: page,
+          snippet: trimmed,
+          progressPercent: Value(_progressPercent),
+          locatorJson: Value(_currentLocatorJson),
+          createdAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      await repo.addBookmark(
+        BookmarksCompanion.insert(
+          id: nowId,
+          bookId: widget.bookId,
+          chapterIndex: chapterIdx,
+          pageInChapter: page,
+          snippet: trimmed,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+  }
+
+  String? _extractSnippetFromLocatorJson(String? locatorJson) {
+    if (locatorJson == null || locatorJson.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(locatorJson);
+      if (decoded is! Map) return null;
+      final text = decoded['text'];
+      if (text is! Map) return null;
+
+      final after = _sanitizeSnippet((text['after'] as String?) ?? '');
+      if (after.isNotEmpty) return after;
+
+      final highlight = _sanitizeSnippet((text['highlight'] as String?) ?? '');
+      if (highlight.isNotEmpty) return highlight;
+
+      final before = (text['before'] as String?) ?? '';
+      if (before.isNotEmpty) {
+        final beforeParts = before.split(RegExp(r'[.!?]\s+'));
+        final tail = beforeParts.isEmpty ? before : beforeParts.last;
+        final sanitizedTail = _sanitizeSnippet(tail);
+        if (sanitizedTail.isNotEmpty) return sanitizedTail;
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  String _extractReadableTextFromHtml(String html) {
+    final headTag = RegExp(r'<head[^>]*>.*?</head>', caseSensitive: false, dotAll: true);
+    final styleTag = RegExp(r'<style[^>]*>.*?</style>', caseSensitive: false, dotAll: true);
+    final scriptTag = RegExp(r'<script[^>]*>.*?</script>', caseSensitive: false, dotAll: true);
+    final htmlTag = RegExp(r'<[^>]+>', caseSensitive: false, dotAll: true);
+    return html
+      .replaceAll(headTag, ' ')
+      .replaceAll(styleTag, ' ')
+      .replaceAll(scriptTag, ' ')
+      .replaceAll(htmlTag, ' ')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>');
+  }
+
+  String _sanitizeSnippet(String value) {
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty) return '';
+
+    final chunks = normalized.split(RegExp(r'(?<=[.!?])\s+|;'));
+    for (final raw in chunks) {
+      final chunk = raw.trim();
+      if (chunk.isEmpty) continue;
+      final lower = chunk.toLowerCase();
+      final looksLikeCss = RegExp(
+        r'^(@page|@media|@font-face|margin\b|padding\b|font\b|line-height\b|body\s*\{|\{|\})',
+      ).hasMatch(lower);
+      if (looksLikeCss) continue;
+      return chunk.length > 120 ? '${chunk.substring(0, 120).trimRight()}…' : chunk;
+    }
+
+    return normalized.length > 120
+        ? '${normalized.substring(0, 120).trimRight()}…'
+        : normalized;
+  }
+
+  double? _extractChapterProgressionFromLocatorJson(String? locatorJson) {
+    if (locatorJson == null || locatorJson.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(locatorJson);
+      if (decoded is! Map) return null;
+      final locations = decoded['locations'];
+      if (locations is! Map) return null;
+      final progression = locations['progression'];
+      if (progression is num) {
+        return progression.toDouble().clamp(0.0, 1.0);
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  String _snippetAroundProgression(String chapterText, double progression) {
+    final normalized = chapterText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty) return '';
+
+    // progression is the chapter-fraction at the START of the current page,
+    // so we extract text starting from that position forwards only.
+    final start = (normalized.length * progression)
+        .round()
+        .clamp(0, normalized.length - 1);
+
+    // Find the first word boundary at or after `start` to avoid mid-word cuts.
+    int wordStart = start;
+    while (wordStart < normalized.length && normalized[wordStart] == ' ') {
+      wordStart++;
+    }
+
+    final end = (wordStart + 260).clamp(0, normalized.length);
+    final segment = normalized.substring(wordStart, end);
+    return _sanitizeSnippet(segment);
   }
 
   Future<void> _ensureBookmarkRemoved() async {
@@ -228,6 +454,10 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
             return BookmarksScreen(
               bookId: widget.bookId,
               chapters: book.chapters,
+              onBookmarkSelected: (bookmark) {
+                _progressPercent = bookmark.progressPercent ?? _progressPercent;
+                _initialLocatorJson = bookmark.locatorJson;
+              },
               onBookmarkTap: (chapterIndex, pageInChapter) {
                 Navigator.of(context).pop();
                 _chapterIndex = chapterIndex;
@@ -243,14 +473,22 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
   }
 
   Future<void> _showHighlightsDialog() async {
+    final parsed = await _loadParsedBook();
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => HighlightsScreen(
           bookId: widget.bookId,
           onHighlightTap: (highlight) {
             Navigator.of(context).pop();
-            _chapterIndex = highlight.chapterIndex;
+            _chapterIndex = highlight.chapterIndex.clamp(
+              0,
+              parsed.chapters.length - 1,
+            );
             _pageInChapter = 0;
+            _progressPercent = highlight.progressPercent ?? _progressPercent;
+            _initialLocatorJson = highlight.locatorJson;
+            _chapterFraction = _computeChapterFraction(highlight, parsed);
           },
         ),
       ),
@@ -427,6 +665,7 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
           ref.read(readerColorModeProvider).valueOrNull ?? ReaderColorMode.sepia;
       final fontFamily =
           ref.read(readerFontFamilyProvider).valueOrNull ?? ReaderTypography.bookerly;
+        final highlightsJson = await _buildHighlightsJson();
 
       await _channel.invokeMethod<void>('openReadium', {
         'bookId': widget.bookId,
@@ -435,10 +674,15 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
         'initialChapterIndex': _chapterIndex,
         'initialPageInChapter': _pageInChapter,
         'initialProgressPercent': _progressPercent,
+        'initialChapterFraction': _chapterFraction,
+        'initialLocatorJson': _initialLocatorJson,
+        'highlightsJson': highlightsJson,
         'fontSize': fontSize,
         'fontFamily': fontFamily,
         'colorMode': colorMode.name,
       });
+      _chapterFraction = null;
+      _initialLocatorJson = null;
       if (!mounted) return;
       setState(() {
         _launching = false;
@@ -449,13 +693,37 @@ class _ReadiumReaderScreenState extends ConsumerState<ReadiumReaderScreen> {
         _launching = false;
         _error = e.message ?? 'Could not open the native Readium reader.';
       });
+      _chapterFraction = null;
+      _initialLocatorJson = null;
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _launching = false;
         _error = 'Could not open the native Readium reader.';
       });
+      _chapterFraction = null;
+      _initialLocatorJson = null;
     }
+  }
+
+  double _computeChapterFraction(Highlight highlight, ParsedBook book) {
+    final chapterIndex = highlight.chapterIndex.clamp(0, book.chapters.length - 1);
+    final plainText = HighlightService.extractPlainText(
+      book.chapters[chapterIndex].htmlContent,
+    );
+
+    var offset = highlight.startOffset;
+    if (offset <= 0 && highlight.content.trim().isNotEmpty) {
+      final foundIndex = plainText.indexOf(highlight.content.trim());
+      if (foundIndex >= 0) {
+        offset = foundIndex;
+      }
+    }
+
+    if (plainText.isEmpty) return 0.0;
+    return (offset.clamp(0, plainText.length) / plainText.length)
+        .toDouble()
+        .clamp(0.0, 1.0);
   }
 
   @override

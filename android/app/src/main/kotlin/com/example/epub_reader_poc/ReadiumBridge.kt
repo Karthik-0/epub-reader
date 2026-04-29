@@ -12,12 +12,14 @@ object ReadiumBridge {
         chapterIndex: Int,
         pageInChapter: Int,
         progressPercent: Double,
+        locatorJson: String?,
     ) {
         val payload = mapOf(
             "bookId" to bookId,
             "chapterIndex" to chapterIndex,
             "pageInChapter" to pageInChapter,
             "progressPercent" to progressPercent,
+            "locatorJson" to locatorJson,
         )
 
         Handler(Looper.getMainLooper()).post {
@@ -31,6 +33,8 @@ object ReadiumBridge {
         chapterIndex: Int,
         pageInChapter: Int,
         progressPercent: Double,
+        locatorJson: String?,
+        snippetText: String? = null,
     ) {
         val payload = mapOf(
             "bookId" to bookId,
@@ -38,6 +42,8 @@ object ReadiumBridge {
             "chapterIndex" to chapterIndex,
             "pageInChapter" to pageInChapter,
             "progressPercent" to progressPercent,
+            "locatorJson" to locatorJson,
+            "snippetText" to snippetText,
         )
 
         Handler(Looper.getMainLooper()).post {
@@ -52,6 +58,7 @@ object ReadiumBridge {
         progressPercent: Double,
         color: String,
         text: String,
+        locatorJson: String?,
     ) {
         val payload = mapOf(
             "bookId" to bookId,
@@ -60,6 +67,7 @@ object ReadiumBridge {
             "progressPercent" to progressPercent,
             "color" to color,
             "text" to text,
+            "locatorJson" to locatorJson,
         )
 
         Handler(Looper.getMainLooper()).post {

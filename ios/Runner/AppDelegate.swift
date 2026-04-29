@@ -68,6 +68,7 @@ import UIKit
     let initialChapterIndex = (args["initialChapterIndex"] as? NSNumber)?.intValue ?? 0
     let initialPageInChapter = (args["initialPageInChapter"] as? NSNumber)?.intValue ?? 0
     let initialProgressPercent = (args["initialProgressPercent"] as? NSNumber)?.doubleValue ?? 0
+    let initialChapterFraction = (args["initialChapterFraction"] as? NSNumber)?.doubleValue
     let fontSize = (args["fontSize"] as? NSNumber)?.doubleValue ?? 17.0
     let fontFamily = (args["fontFamily"] as? String) ?? "Iowan Old Style"
     let colorMode = (args["colorMode"] as? String) ?? "sepia"
@@ -96,6 +97,7 @@ import UIKit
       initialChapterIndex: initialChapterIndex,
       initialPageInChapter: initialPageInChapter,
       initialProgressPercent: initialProgressPercent,
+      initialChapterFraction: initialChapterFraction,
       initialPreferences: prefs,
       onPositionChanged: { [weak self] payload in
         self?.readiumChannel?.invokeMethod("onReadiumPositionChanged", arguments: payload)
@@ -181,6 +183,7 @@ final class ReadiumNativeViewController: UIViewController {
   private let initialChapterIndex: Int
   private let initialPageInChapter: Int
   private let initialProgressPercent: Double
+  private let initialChapterFraction: Double?
   private let onPositionChanged: ([String: Any]) -> Void
   private let onToolbarAction: ([String: Any]) -> Void
   private let onHighlightCreated: ([String: Any]) -> Void
@@ -216,6 +219,7 @@ final class ReadiumNativeViewController: UIViewController {
     initialChapterIndex: Int,
     initialPageInChapter: Int,
     initialProgressPercent: Double,
+    initialChapterFraction: Double?,
     initialPreferences: ReadiumPresentationPreferences,
     onPositionChanged: @escaping ([String: Any]) -> Void,
     onToolbarAction: @escaping ([String: Any]) -> Void,
@@ -227,6 +231,7 @@ final class ReadiumNativeViewController: UIViewController {
     self.initialChapterIndex = initialChapterIndex
     self.initialPageInChapter = initialPageInChapter
     self.initialProgressPercent = initialProgressPercent
+    self.initialChapterFraction = initialChapterFraction
     self.presentationPreferences = initialPreferences
     self.onPositionChanged = onPositionChanged
     self.onToolbarAction = onToolbarAction
@@ -353,6 +358,11 @@ final class ReadiumNativeViewController: UIViewController {
 
     if chapter < positionsByChapter.count, !positionsByChapter[chapter].isEmpty {
       let chapterPositions = positionsByChapter[chapter]
+      if let fraction = initialChapterFraction {
+        let clamped = max(0, min(1, fraction))
+        let index = min(Int(clamped * Double(chapterPositions.count - 1)), chapterPositions.count - 1)
+        return chapterPositions[index]
+      }
       return chapterPositions[min(page, chapterPositions.count - 1)]
     }
 
@@ -391,14 +401,43 @@ final class ReadiumNativeViewController: UIViewController {
     ])
   }
 
-  private func emitToolbarAction(_ action: String) {
-    onToolbarAction([
+  // JavaScript to get first visible paragraph on the current column-paginated page.
+  // Readium uses horizontal CSS columns, so visibility is determined by r.left being
+  // in [0, window.innerWidth), not by vertical position.
+  private static let jsFirstVisibleText = """
+    (function(){
+      var pw=window.innerWidth;
+      var found=[];
+      var tags=['p','li','h1','h2','h3','h4','h5','h6'];
+      for(var i=0;i<tags.length;i++){
+        var els=document.querySelectorAll(tags[i]);
+        for(var j=0;j<els.length;j++){
+          var el=els[j];
+          var r=el.getBoundingClientRect();
+          if(r.left>=-2&&r.left<pw&&r.width>0&&r.height>0){
+            var t=(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim();
+            if(t.length>15){found.push({top:r.top,left:r.left,tag:i,text:t});}
+          }
+        }
+      }
+      found.sort(function(a,b){return a.top-b.top||a.left-b.left||a.tag-b.tag;});
+      if(found.length>0) return found[0].text.substring(0,200);
+      return '';
+    })()
+    """
+
+  private func emitToolbarAction(_ action: String, snippetText: String? = nil) {
+    var payload: [String: Any] = [
       "bookId": bookId,
       "action": action,
       "chapterIndex": currentChapterIndex,
       "pageInChapter": currentPageInChapter,
       "progressPercent": currentProgressPercent,
-    ])
+    ]
+    if let snippet = snippetText {
+      payload["snippetText"] = snippet
+    }
+    onToolbarAction(payload)
   }
 
   private func emitHighlightCreated(text: String, color: String, locator: Locator) {
@@ -561,14 +600,29 @@ final class ReadiumNativeViewController: UIViewController {
   @objc
   private func bookmarkTapped() {
     let key = currentBookmarkKey()
-    if bookmarkedPageKeys.contains(key) {
+    let isRemoving = bookmarkedPageKeys.contains(key)
+    if isRemoving {
       bookmarkedPageKeys.remove(key)
       emitToolbarAction("bookmark_remove")
+      updateBookmarkButtonState()
     } else {
       bookmarkedPageKeys.insert(key)
-      emitToolbarAction("bookmark_add")
+      updateBookmarkButtonState()
+      // Capture first visible text from WebView before emitting add
+      Task { [weak self] in
+        guard let self else { return }
+        var snippet: String? = nil
+        if let nav = self.navigator {
+          snippet = try? await nav.evaluateScript(Self.jsFirstVisibleText)
+        }
+        let cleaned = snippet?
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+          .components(separatedBy: .newlines).joined(separator: " ")
+          .replacingOccurrences(of: "  ", with: " ")
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.emitToolbarAction("bookmark_add", snippetText: cleaned?.isEmpty == false ? cleaned : nil)
+      }
     }
-    updateBookmarkButtonState()
   }
 }
 

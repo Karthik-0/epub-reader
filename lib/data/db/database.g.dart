@@ -703,6 +703,28 @@ class $HighlightsTable extends Highlights
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _progressPercentMeta = const VerificationMeta(
+    'progressPercent',
+  );
+  @override
+  late final GeneratedColumn<double> progressPercent = GeneratedColumn<double>(
+    'progress_percent',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locatorJsonMeta = const VerificationMeta(
+    'locatorJson',
+  );
+  @override
+  late final GeneratedColumn<String> locatorJson = GeneratedColumn<String>(
+    'locator_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -723,6 +745,8 @@ class $HighlightsTable extends Highlights
     endOffset,
     content,
     color,
+    progressPercent,
+    locatorJson,
     createdAt,
   ];
   @override
@@ -796,6 +820,24 @@ class $HighlightsTable extends Highlights
     } else if (isInserting) {
       context.missing(_colorMeta);
     }
+    if (data.containsKey('progress_percent')) {
+      context.handle(
+        _progressPercentMeta,
+        progressPercent.isAcceptableOrUnknown(
+          data['progress_percent']!,
+          _progressPercentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('locator_json')) {
+      context.handle(
+        _locatorJsonMeta,
+        locatorJson.isAcceptableOrUnknown(
+          data['locator_json']!,
+          _locatorJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -841,6 +883,14 @@ class $HighlightsTable extends Highlights
         DriftSqlType.string,
         data['${effectivePrefix}color'],
       )!,
+      progressPercent: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}progress_percent'],
+      ),
+      locatorJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}locator_json'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -862,6 +912,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
   final int endOffset;
   final String content;
   final String color;
+  final double? progressPercent;
+  final String? locatorJson;
   final DateTime createdAt;
   const Highlight({
     required this.id,
@@ -871,6 +923,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     required this.endOffset,
     required this.content,
     required this.color,
+    this.progressPercent,
+    this.locatorJson,
     required this.createdAt,
   });
   @override
@@ -883,6 +937,12 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     map['end_offset'] = Variable<int>(endOffset);
     map['content'] = Variable<String>(content);
     map['color'] = Variable<String>(color);
+    if (!nullToAbsent || progressPercent != null) {
+      map['progress_percent'] = Variable<double>(progressPercent);
+    }
+    if (!nullToAbsent || locatorJson != null) {
+      map['locator_json'] = Variable<String>(locatorJson);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -896,6 +956,12 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       endOffset: Value(endOffset),
       content: Value(content),
       color: Value(color),
+      progressPercent: progressPercent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(progressPercent),
+      locatorJson: locatorJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locatorJson),
       createdAt: Value(createdAt),
     );
   }
@@ -913,6 +979,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       endOffset: serializer.fromJson<int>(json['endOffset']),
       content: serializer.fromJson<String>(json['content']),
       color: serializer.fromJson<String>(json['color']),
+      progressPercent: serializer.fromJson<double?>(json['progressPercent']),
+      locatorJson: serializer.fromJson<String?>(json['locatorJson']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -927,6 +995,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       'endOffset': serializer.toJson<int>(endOffset),
       'content': serializer.toJson<String>(content),
       'color': serializer.toJson<String>(color),
+      'progressPercent': serializer.toJson<double?>(progressPercent),
+      'locatorJson': serializer.toJson<String?>(locatorJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -939,6 +1009,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     int? endOffset,
     String? content,
     String? color,
+    Value<double?> progressPercent = const Value.absent(),
+    Value<String?> locatorJson = const Value.absent(),
     DateTime? createdAt,
   }) => Highlight(
     id: id ?? this.id,
@@ -948,6 +1020,10 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     endOffset: endOffset ?? this.endOffset,
     content: content ?? this.content,
     color: color ?? this.color,
+    progressPercent: progressPercent.present
+        ? progressPercent.value
+        : this.progressPercent,
+    locatorJson: locatorJson.present ? locatorJson.value : this.locatorJson,
     createdAt: createdAt ?? this.createdAt,
   );
   Highlight copyWithCompanion(HighlightsCompanion data) {
@@ -963,6 +1039,12 @@ class Highlight extends DataClass implements Insertable<Highlight> {
       endOffset: data.endOffset.present ? data.endOffset.value : this.endOffset,
       content: data.content.present ? data.content.value : this.content,
       color: data.color.present ? data.color.value : this.color,
+      progressPercent: data.progressPercent.present
+          ? data.progressPercent.value
+          : this.progressPercent,
+      locatorJson: data.locatorJson.present
+          ? data.locatorJson.value
+          : this.locatorJson,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -977,6 +1059,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
           ..write('endOffset: $endOffset, ')
           ..write('content: $content, ')
           ..write('color: $color, ')
+          ..write('progressPercent: $progressPercent, ')
+          ..write('locatorJson: $locatorJson, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -991,6 +1075,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
     endOffset,
     content,
     color,
+    progressPercent,
+    locatorJson,
     createdAt,
   );
   @override
@@ -1004,6 +1090,8 @@ class Highlight extends DataClass implements Insertable<Highlight> {
           other.endOffset == this.endOffset &&
           other.content == this.content &&
           other.color == this.color &&
+          other.progressPercent == this.progressPercent &&
+          other.locatorJson == this.locatorJson &&
           other.createdAt == this.createdAt);
 }
 
@@ -1015,6 +1103,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
   final Value<int> endOffset;
   final Value<String> content;
   final Value<String> color;
+  final Value<double?> progressPercent;
+  final Value<String?> locatorJson;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const HighlightsCompanion({
@@ -1025,6 +1115,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     this.endOffset = const Value.absent(),
     this.content = const Value.absent(),
     this.color = const Value.absent(),
+    this.progressPercent = const Value.absent(),
+    this.locatorJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1036,6 +1128,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     required int endOffset,
     required String content,
     required String color,
+    this.progressPercent = const Value.absent(),
+    this.locatorJson = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -1054,6 +1148,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     Expression<int>? endOffset,
     Expression<String>? content,
     Expression<String>? color,
+    Expression<double>? progressPercent,
+    Expression<String>? locatorJson,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -1065,6 +1161,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
       if (endOffset != null) 'end_offset': endOffset,
       if (content != null) 'content': content,
       if (color != null) 'color': color,
+      if (progressPercent != null) 'progress_percent': progressPercent,
+      if (locatorJson != null) 'locator_json': locatorJson,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1078,6 +1176,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     Value<int>? endOffset,
     Value<String>? content,
     Value<String>? color,
+    Value<double?>? progressPercent,
+    Value<String?>? locatorJson,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -1089,6 +1189,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
       endOffset: endOffset ?? this.endOffset,
       content: content ?? this.content,
       color: color ?? this.color,
+      progressPercent: progressPercent ?? this.progressPercent,
+      locatorJson: locatorJson ?? this.locatorJson,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -1118,6 +1220,12 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
     if (color.present) {
       map['color'] = Variable<String>(color.value);
     }
+    if (progressPercent.present) {
+      map['progress_percent'] = Variable<double>(progressPercent.value);
+    }
+    if (locatorJson.present) {
+      map['locator_json'] = Variable<String>(locatorJson.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1137,6 +1245,8 @@ class HighlightsCompanion extends UpdateCompanion<Highlight> {
           ..write('endOffset: $endOffset, ')
           ..write('content: $content, ')
           ..write('color: $color, ')
+          ..write('progressPercent: $progressPercent, ')
+          ..write('locatorJson: $locatorJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -1204,6 +1314,28 @@ class $BookmarksTable extends Bookmarks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _progressPercentMeta = const VerificationMeta(
+    'progressPercent',
+  );
+  @override
+  late final GeneratedColumn<double> progressPercent = GeneratedColumn<double>(
+    'progress_percent',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _locatorJsonMeta = const VerificationMeta(
+    'locatorJson',
+  );
+  @override
+  late final GeneratedColumn<String> locatorJson = GeneratedColumn<String>(
+    'locator_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1222,6 +1354,8 @@ class $BookmarksTable extends Bookmarks
     chapterIndex,
     pageInChapter,
     snippet,
+    progressPercent,
+    locatorJson,
     createdAt,
   ];
   @override
@@ -1279,6 +1413,24 @@ class $BookmarksTable extends Bookmarks
     } else if (isInserting) {
       context.missing(_snippetMeta);
     }
+    if (data.containsKey('progress_percent')) {
+      context.handle(
+        _progressPercentMeta,
+        progressPercent.isAcceptableOrUnknown(
+          data['progress_percent']!,
+          _progressPercentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('locator_json')) {
+      context.handle(
+        _locatorJsonMeta,
+        locatorJson.isAcceptableOrUnknown(
+          data['locator_json']!,
+          _locatorJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1316,6 +1468,14 @@ class $BookmarksTable extends Bookmarks
         DriftSqlType.string,
         data['${effectivePrefix}snippet'],
       )!,
+      progressPercent: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}progress_percent'],
+      ),
+      locatorJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}locator_json'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1335,6 +1495,8 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
   final int chapterIndex;
   final int pageInChapter;
   final String snippet;
+  final double? progressPercent;
+  final String? locatorJson;
   final DateTime createdAt;
   const Bookmark({
     required this.id,
@@ -1342,6 +1504,8 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     required this.chapterIndex,
     required this.pageInChapter,
     required this.snippet,
+    this.progressPercent,
+    this.locatorJson,
     required this.createdAt,
   });
   @override
@@ -1352,6 +1516,12 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     map['chapter_index'] = Variable<int>(chapterIndex);
     map['page_in_chapter'] = Variable<int>(pageInChapter);
     map['snippet'] = Variable<String>(snippet);
+    if (!nullToAbsent || progressPercent != null) {
+      map['progress_percent'] = Variable<double>(progressPercent);
+    }
+    if (!nullToAbsent || locatorJson != null) {
+      map['locator_json'] = Variable<String>(locatorJson);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1363,6 +1533,12 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
       chapterIndex: Value(chapterIndex),
       pageInChapter: Value(pageInChapter),
       snippet: Value(snippet),
+      progressPercent: progressPercent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(progressPercent),
+      locatorJson: locatorJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locatorJson),
       createdAt: Value(createdAt),
     );
   }
@@ -1378,6 +1554,8 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
       chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
       pageInChapter: serializer.fromJson<int>(json['pageInChapter']),
       snippet: serializer.fromJson<String>(json['snippet']),
+      progressPercent: serializer.fromJson<double?>(json['progressPercent']),
+      locatorJson: serializer.fromJson<String?>(json['locatorJson']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1390,6 +1568,8 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
       'chapterIndex': serializer.toJson<int>(chapterIndex),
       'pageInChapter': serializer.toJson<int>(pageInChapter),
       'snippet': serializer.toJson<String>(snippet),
+      'progressPercent': serializer.toJson<double?>(progressPercent),
+      'locatorJson': serializer.toJson<String?>(locatorJson),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1400,6 +1580,8 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     int? chapterIndex,
     int? pageInChapter,
     String? snippet,
+    Value<double?> progressPercent = const Value.absent(),
+    Value<String?> locatorJson = const Value.absent(),
     DateTime? createdAt,
   }) => Bookmark(
     id: id ?? this.id,
@@ -1407,6 +1589,10 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
     chapterIndex: chapterIndex ?? this.chapterIndex,
     pageInChapter: pageInChapter ?? this.pageInChapter,
     snippet: snippet ?? this.snippet,
+    progressPercent: progressPercent.present
+        ? progressPercent.value
+        : this.progressPercent,
+    locatorJson: locatorJson.present ? locatorJson.value : this.locatorJson,
     createdAt: createdAt ?? this.createdAt,
   );
   Bookmark copyWithCompanion(BookmarksCompanion data) {
@@ -1420,6 +1606,12 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
           ? data.pageInChapter.value
           : this.pageInChapter,
       snippet: data.snippet.present ? data.snippet.value : this.snippet,
+      progressPercent: data.progressPercent.present
+          ? data.progressPercent.value
+          : this.progressPercent,
+      locatorJson: data.locatorJson.present
+          ? data.locatorJson.value
+          : this.locatorJson,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1432,14 +1624,24 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
           ..write('chapterIndex: $chapterIndex, ')
           ..write('pageInChapter: $pageInChapter, ')
           ..write('snippet: $snippet, ')
+          ..write('progressPercent: $progressPercent, ')
+          ..write('locatorJson: $locatorJson, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, bookId, chapterIndex, pageInChapter, snippet, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    chapterIndex,
+    pageInChapter,
+    snippet,
+    progressPercent,
+    locatorJson,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1449,6 +1651,8 @@ class Bookmark extends DataClass implements Insertable<Bookmark> {
           other.chapterIndex == this.chapterIndex &&
           other.pageInChapter == this.pageInChapter &&
           other.snippet == this.snippet &&
+          other.progressPercent == this.progressPercent &&
+          other.locatorJson == this.locatorJson &&
           other.createdAt == this.createdAt);
 }
 
@@ -1458,6 +1662,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
   final Value<int> chapterIndex;
   final Value<int> pageInChapter;
   final Value<String> snippet;
+  final Value<double?> progressPercent;
+  final Value<String?> locatorJson;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const BookmarksCompanion({
@@ -1466,6 +1672,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
     this.chapterIndex = const Value.absent(),
     this.pageInChapter = const Value.absent(),
     this.snippet = const Value.absent(),
+    this.progressPercent = const Value.absent(),
+    this.locatorJson = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1475,6 +1683,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
     required int chapterIndex,
     required int pageInChapter,
     required String snippet,
+    this.progressPercent = const Value.absent(),
+    this.locatorJson = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -1489,6 +1699,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
     Expression<int>? chapterIndex,
     Expression<int>? pageInChapter,
     Expression<String>? snippet,
+    Expression<double>? progressPercent,
+    Expression<String>? locatorJson,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -1498,6 +1710,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
       if (chapterIndex != null) 'chapter_index': chapterIndex,
       if (pageInChapter != null) 'page_in_chapter': pageInChapter,
       if (snippet != null) 'snippet': snippet,
+      if (progressPercent != null) 'progress_percent': progressPercent,
+      if (locatorJson != null) 'locator_json': locatorJson,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1509,6 +1723,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
     Value<int>? chapterIndex,
     Value<int>? pageInChapter,
     Value<String>? snippet,
+    Value<double?>? progressPercent,
+    Value<String?>? locatorJson,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -1518,6 +1734,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
       chapterIndex: chapterIndex ?? this.chapterIndex,
       pageInChapter: pageInChapter ?? this.pageInChapter,
       snippet: snippet ?? this.snippet,
+      progressPercent: progressPercent ?? this.progressPercent,
+      locatorJson: locatorJson ?? this.locatorJson,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -1541,6 +1759,12 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
     if (snippet.present) {
       map['snippet'] = Variable<String>(snippet.value);
     }
+    if (progressPercent.present) {
+      map['progress_percent'] = Variable<double>(progressPercent.value);
+    }
+    if (locatorJson.present) {
+      map['locator_json'] = Variable<String>(locatorJson.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1558,6 +1782,8 @@ class BookmarksCompanion extends UpdateCompanion<Bookmark> {
           ..write('chapterIndex: $chapterIndex, ')
           ..write('pageInChapter: $pageInChapter, ')
           ..write('snippet: $snippet, ')
+          ..write('progressPercent: $progressPercent, ')
+          ..write('locatorJson: $locatorJson, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -2079,6 +2305,8 @@ typedef $$HighlightsTableCreateCompanionBuilder =
       required int endOffset,
       required String content,
       required String color,
+      Value<double?> progressPercent,
+      Value<String?> locatorJson,
       required DateTime createdAt,
       Value<int> rowid,
     });
@@ -2091,6 +2319,8 @@ typedef $$HighlightsTableUpdateCompanionBuilder =
       Value<int> endOffset,
       Value<String> content,
       Value<String> color,
+      Value<double?> progressPercent,
+      Value<String?> locatorJson,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -2154,6 +2384,16 @@ class $$HighlightsTableFilterComposer
 
   ColumnFilters<String> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get progressPercent => $composableBuilder(
+    column: $table.progressPercent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locatorJson => $composableBuilder(
+    column: $table.locatorJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2225,6 +2465,16 @@ class $$HighlightsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get progressPercent => $composableBuilder(
+    column: $table.progressPercent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locatorJson => $composableBuilder(
+    column: $table.locatorJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2284,6 +2534,16 @@ class $$HighlightsTableAnnotationComposer
 
   GeneratedColumn<String> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<double> get progressPercent => $composableBuilder(
+    column: $table.progressPercent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get locatorJson => $composableBuilder(
+    column: $table.locatorJson,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2347,6 +2607,8 @@ class $$HighlightsTableTableManager
                 Value<int> endOffset = const Value.absent(),
                 Value<String> content = const Value.absent(),
                 Value<String> color = const Value.absent(),
+                Value<double?> progressPercent = const Value.absent(),
+                Value<String?> locatorJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => HighlightsCompanion(
@@ -2357,6 +2619,8 @@ class $$HighlightsTableTableManager
                 endOffset: endOffset,
                 content: content,
                 color: color,
+                progressPercent: progressPercent,
+                locatorJson: locatorJson,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -2369,6 +2633,8 @@ class $$HighlightsTableTableManager
                 required int endOffset,
                 required String content,
                 required String color,
+                Value<double?> progressPercent = const Value.absent(),
+                Value<String?> locatorJson = const Value.absent(),
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => HighlightsCompanion.insert(
@@ -2379,6 +2645,8 @@ class $$HighlightsTableTableManager
                 endOffset: endOffset,
                 content: content,
                 color: color,
+                progressPercent: progressPercent,
+                locatorJson: locatorJson,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -2456,6 +2724,8 @@ typedef $$BookmarksTableCreateCompanionBuilder =
       required int chapterIndex,
       required int pageInChapter,
       required String snippet,
+      Value<double?> progressPercent,
+      Value<String?> locatorJson,
       required DateTime createdAt,
       Value<int> rowid,
     });
@@ -2466,6 +2736,8 @@ typedef $$BookmarksTableUpdateCompanionBuilder =
       Value<int> chapterIndex,
       Value<int> pageInChapter,
       Value<String> snippet,
+      Value<double?> progressPercent,
+      Value<String?> locatorJson,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -2519,6 +2791,16 @@ class $$BookmarksTableFilterComposer
 
   ColumnFilters<String> get snippet => $composableBuilder(
     column: $table.snippet,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get progressPercent => $composableBuilder(
+    column: $table.progressPercent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locatorJson => $composableBuilder(
+    column: $table.locatorJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2580,6 +2862,16 @@ class $$BookmarksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get progressPercent => $composableBuilder(
+    column: $table.progressPercent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locatorJson => $composableBuilder(
+    column: $table.locatorJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2633,6 +2925,16 @@ class $$BookmarksTableAnnotationComposer
 
   GeneratedColumn<String> get snippet =>
       $composableBuilder(column: $table.snippet, builder: (column) => column);
+
+  GeneratedColumn<double> get progressPercent => $composableBuilder(
+    column: $table.progressPercent,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get locatorJson => $composableBuilder(
+    column: $table.locatorJson,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2694,6 +2996,8 @@ class $$BookmarksTableTableManager
                 Value<int> chapterIndex = const Value.absent(),
                 Value<int> pageInChapter = const Value.absent(),
                 Value<String> snippet = const Value.absent(),
+                Value<double?> progressPercent = const Value.absent(),
+                Value<String?> locatorJson = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BookmarksCompanion(
@@ -2702,6 +3006,8 @@ class $$BookmarksTableTableManager
                 chapterIndex: chapterIndex,
                 pageInChapter: pageInChapter,
                 snippet: snippet,
+                progressPercent: progressPercent,
+                locatorJson: locatorJson,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -2712,6 +3018,8 @@ class $$BookmarksTableTableManager
                 required int chapterIndex,
                 required int pageInChapter,
                 required String snippet,
+                Value<double?> progressPercent = const Value.absent(),
+                Value<String?> locatorJson = const Value.absent(),
                 required DateTime createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => BookmarksCompanion.insert(
@@ -2720,6 +3028,8 @@ class $$BookmarksTableTableManager
                 chapterIndex: chapterIndex,
                 pageInChapter: pageInChapter,
                 snippet: snippet,
+                progressPercent: progressPercent,
+                locatorJson: locatorJson,
                 createdAt: createdAt,
                 rowid: rowid,
               ),

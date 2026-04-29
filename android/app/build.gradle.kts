@@ -44,6 +44,7 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
     // Readium toolkit modules for native EPUB rendering.
     implementation("org.readium.kotlin-toolkit:readium-shared:$readiumVersion")

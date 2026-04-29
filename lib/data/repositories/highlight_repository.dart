@@ -20,6 +20,10 @@ class HighlightRepository {
     return (db.select(db.highlights)..where((h) => h.bookId.equals(bookId))).watch();
   }
 
+  Future<List<Highlight>> getHighlightsForBookOnce(String bookId) {
+    return (db.select(db.highlights)..where((h) => h.bookId.equals(bookId))).get();
+  }
+
   Stream<List<Highlight>> watchHighlightsForChapter(String bookId, int chapterIndex) {
     return (db.select(db.highlights)
           ..where((h) => h.bookId.equals(bookId))

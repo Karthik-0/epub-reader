@@ -28,6 +28,8 @@ class Highlights extends Table {
   IntColumn get endOffset => integer()();
   TextColumn get content => text()();                        // the highlighted text itself
   TextColumn get color => text()();                       // 'yellow' | 'green' | 'pink'
+  RealColumn get progressPercent => real().nullable()();
+  TextColumn get locatorJson => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
@@ -40,6 +42,8 @@ class Bookmarks extends Table {
   IntColumn get chapterIndex => integer()();
   IntColumn get pageInChapter => integer()();
   TextColumn get snippet => text()();                     // first ~80 chars of page
+  RealColumn get progressPercent => real().nullable()();
+  TextColumn get locatorJson => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
@@ -53,7 +57,27 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await customStatement(
+          'ALTER TABLE highlights ADD COLUMN progress_percent REAL NULL',
+        );
+        await customStatement(
+          'ALTER TABLE highlights ADD COLUMN locator_json TEXT NULL',
+        );
+        await customStatement(
+          'ALTER TABLE bookmarks ADD COLUMN progress_percent REAL NULL',
+        );
+        await customStatement(
+          'ALTER TABLE bookmarks ADD COLUMN locator_json TEXT NULL',
+        );
+      }
+    },
+  );
 }
 
 final databaseProvider = Provider<AppDatabase>((ref) => AppDatabase());

@@ -12,12 +12,14 @@ class BookmarksScreen extends ConsumerWidget {
 
   /// Called with (chapterIndex, pageInChapter) when the user taps a bookmark.
   final void Function(int chapterIndex, int pageInChapter) onBookmarkTap;
+  final ValueChanged<Bookmark>? onBookmarkSelected;
 
   const BookmarksScreen({
     super.key,
     required this.bookId,
     required this.chapters,
     required this.onBookmarkTap,
+    this.onBookmarkSelected,
   });
 
   @override
@@ -78,6 +80,7 @@ class BookmarksScreen extends ConsumerWidget {
                     chapterTitle: _chapterTitle(bookmarks[i].chapterIndex),
                     onTap: () => onBookmarkTap(
                         bookmarks[i].chapterIndex, bookmarks[i].pageInChapter),
+                    onSelected: () => onBookmarkSelected?.call(bookmarks[i]),
                     onDelete: () => ref
                         .read(bookmarkRepoProvider)
                         .deleteBookmark(bookmarks[i].id),
@@ -109,12 +112,14 @@ class _BookmarkTile extends StatelessWidget {
   final Bookmark bookmark;
   final String chapterTitle;
   final VoidCallback onTap;
+  final VoidCallback onSelected;
   final VoidCallback onDelete;
 
   const _BookmarkTile({
     required this.bookmark,
     required this.chapterTitle,
     required this.onTap,
+    required this.onSelected,
     required this.onDelete,
   });
 
@@ -132,7 +137,10 @@ class _BookmarkTile extends StatelessWidget {
       ),
       onDismissed: (_) => onDelete(),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          onSelected();
+          onTap();
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
@@ -152,13 +160,13 @@ class _BookmarkTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      bookmark.snippet.isEmpty ? chapterTitle : bookmark.snippet,
+                      _displaySnippet(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$chapterTitle · Page ${bookmark.pageInChapter + 1} · ${_formatDate(bookmark.createdAt)}',
+                      'Page ${bookmark.pageInChapter + 1} · $chapterTitle · ${_formatDate(bookmark.createdAt)}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -173,6 +181,26 @@ class _BookmarkTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _displaySnippet() {
+    final raw = bookmark.snippet.trim();
+    if (raw.isEmpty) return chapterTitle;
+
+    final normalized = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final chunks = normalized.split(RegExp(r'(?<=[.!?])\s+|;'));
+    for (final rawChunk in chunks) {
+      final chunk = rawChunk.trim();
+      if (chunk.isEmpty) continue;
+      final lower = chunk.toLowerCase();
+      final looksLikeCss = RegExp(
+        r'^(@page|@media|@font-face|margin\b|padding\b|font\b|line-height\b|body\s*\{|\{|\})',
+      ).hasMatch(lower);
+      if (looksLikeCss) continue;
+      return chunk;
+    }
+
+    return chapterTitle;
   }
 
   String _formatDate(DateTime dt) {
